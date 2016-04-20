@@ -63,8 +63,8 @@ public class TimestampIncrementingTableQuerier extends TableQuerier {
 
   public TimestampIncrementingTableQuerier(QueryMode mode, String name, String topicPrefix,
                                            String timestampColumn, Long timestampOffset,
-                                           String incrementingColumn, Long incrementingOffset) {
-    super(mode, name, topicPrefix);
+                                           String incrementingColumn, Long incrementingOffset, Integer fetchSize) {
+    super(mode, name, topicPrefix, fetchSize);
     this.timestampColumn = timestampColumn;
     this.timestampOffset = timestampOffset;
     this.incrementingColumn = incrementingColumn;
