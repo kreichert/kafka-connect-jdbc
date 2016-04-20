@@ -41,6 +41,10 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
       + "setting can be used to limit the amount of data buffered internally in the connector.";
   public static final int BATCH_MAX_ROWS_DEFAULT = 100;
 
+  public static final String FETCH_SIZE_CONFIG = "fetch.size";
+  public static final int FETCH_SIZE_DEFAULT = 100;
+  private static final String FETCH_SIZE_CONFIG_DOC = "Number of records to fetch when getting results based on cursor";
+
   public static final String MODE_CONFIG = "mode";
   private static final String MODE_DOC =
       "The mode for updating a table each time it is polled. Options include:\n"
@@ -132,7 +136,9 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
         .define(QUERY_CONFIG, Type.STRING, QUERY_DEFAULT,
                 Importance.MEDIUM, QUERY_DOC)
         .define(TOPIC_PREFIX_CONFIG, Type.STRING,
-                Importance.HIGH, TOPIC_PREFIX_DOC);
+                Importance.HIGH, TOPIC_PREFIX_DOC)
+        .define(FETCH_SIZE_CONFIG, Type.INT, FETCH_SIZE_DEFAULT, Importance.MEDIUM,
+                FETCH_SIZE_CONFIG_DOC);
   }
 
   static ConfigDef config = baseConfigDef();

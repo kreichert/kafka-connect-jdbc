@@ -43,12 +43,14 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
   protected PreparedStatement stmt;
   protected ResultSet resultSet;
   protected Schema schema;
+  protected Integer fetchSize = 100;
 
-  public TableQuerier(QueryMode mode, String nameOrQuery, String topicPrefix) {
+  public TableQuerier(QueryMode mode, String nameOrQuery, String topicPrefix, Integer fetchSize) {
     this.mode = mode;
     this.name = mode.equals(QueryMode.TABLE) ? nameOrQuery : null;
     this.query = mode.equals(QueryMode.QUERY) ? nameOrQuery : null;
     this.topicPrefix = topicPrefix;
+    this.fetchSize = fetchSize;
     this.lastUpdate = 0;
   }
 
@@ -72,7 +74,14 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
 
   public void maybeStartQuery(Connection db) throws SQLException {
     if (resultSet == null) {
+      if (fetchSize > 0) {
+        db.setAutoCommit(false);
+      }
       stmt = getOrCreatePreparedStatement(db);
+      if (fetchSize > 0) {
+        stmt.setFetchDirection(ResultSet.FETCH_FORWARD);
+        stmt.setFetchSize(fetchSize);
+      }
       resultSet = executeQuery();
       schema = DataConverter.convertSchema(name, resultSet.getMetaData());
     }
