@@ -16,6 +16,9 @@
 
 package io.confluent.connect.jdbc;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -32,9 +35,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import io.confluent.common.config.ConfigException;
-import io.confluent.common.utils.SystemTime;
-import io.confluent.common.utils.Time;
 import io.confluent.connect.jdbc.util.Version;
 
 /**
@@ -123,13 +123,19 @@ public class JdbcSourceTask extends SourceTask {
         = config.getString(JdbcSourceTaskConfig.INCREMENTING_COLUMN_NAME_CONFIG);
     String timestampColumn
         = config.getString(JdbcSourceTaskConfig.TIMESTAMP_COLUMN_NAME_CONFIG);
+    Long timestampDelayInterval
+        = config.getLong(JdbcSourceTaskConfig.TIMESTAMP_DELAY_INTERVAL_MS_CONFIG);
+    boolean validateNonNulls
+        = config.getBoolean(JdbcSourceTaskConfig.VALIDATE_NON_NULL_CONFIG);
     Integer fetchSize = config.getInt(JdbcSourceTaskConfig.FETCH_SIZE_CONFIG);
 
     for (String tableOrQuery : tablesOrQuery) {
       final Map<String, String> partition;
       switch (queryMode) {
         case TABLE:
-          validateNonNullable(mode, tableOrQuery, incrementingColumn, timestampColumn);
+          if (validateNonNulls) {
+            validateNonNullable(mode, tableOrQuery, incrementingColumn, timestampColumn);
+          }
           partition = Collections.singletonMap(
               JdbcSourceConnectorConstants.TABLE_NAME_KEY, tableOrQuery);
           break;
@@ -142,9 +148,9 @@ public class JdbcSourceTask extends SourceTask {
       }
       Map<String, Object> offset = offsets == null ? null : offsets.get(partition);
       Long incrementingOffset = offset == null ? null :
-                              (Long)offset.get(INCREMENTING_FIELD);
+                              (Long) offset.get(INCREMENTING_FIELD);
       Long timestampOffset = offset == null ? null :
-                             (Long)offset.get(TIMESTAMP_FIELD);
+                             (Long) offset.get(TIMESTAMP_FIELD);
 
       String topicPrefix = config.getString(JdbcSourceTaskConfig.TOPIC_PREFIX_CONFIG);
 
@@ -152,14 +158,14 @@ public class JdbcSourceTask extends SourceTask {
         tableQueue.add(new BulkTableQuerier(queryMode, tableOrQuery, topicPrefix, fetchSize));
       } else if (mode.equals(JdbcSourceTaskConfig.MODE_INCREMENTING)) {
         tableQueue.add(new TimestampIncrementingTableQuerier(
-            queryMode, tableOrQuery, topicPrefix, null, null, incrementingColumn, incrementingOffset, fetchSize));
+            queryMode, tableOrQuery, topicPrefix, null, null, incrementingColumn, incrementingOffset, timestampDelayInterval, fetchSize));
       } else if (mode.equals(JdbcSourceTaskConfig.MODE_TIMESTAMP)) {
         tableQueue.add(new TimestampIncrementingTableQuerier(
-            queryMode, tableOrQuery, topicPrefix, timestampColumn, timestampOffset, null, null, fetchSize));
+            queryMode, tableOrQuery, topicPrefix, timestampColumn, timestampOffset, null, null, timestampDelayInterval, fetchSize));
       } else if (mode.endsWith(JdbcSourceTaskConfig.MODE_TIMESTAMP_INCREMENTING)) {
         tableQueue.add(new TimestampIncrementingTableQuerier(
             queryMode, tableOrQuery, topicPrefix, timestampColumn, timestampOffset,
-            incrementingColumn, incrementingOffset, fetchSize));
+            incrementingColumn, incrementingOffset, timestampDelayInterval, fetchSize));
       }
     }
 
@@ -203,7 +209,7 @@ public class JdbcSourceTask extends SourceTask {
 
       List<SourceRecord> results = new ArrayList<>();
       try {
-        log.trace("Checking for next block of results from {}", querier.toString());
+        log.debug("Checking for next block of results from {}", querier.toString());
         querier.maybeStartQuery(db);
 
         int batchMaxRows = config.getInt(JdbcSourceTaskConfig.BATCH_MAX_ROWS_CONFIG);
@@ -212,9 +218,10 @@ public class JdbcSourceTask extends SourceTask {
           results.add(querier.extractRecord());
         }
 
+
         // If we finished processing the results from this query, we can clear it out
         if (!hadNext) {
-          log.trace("Closing this query for {}", querier.toString());
+          log.debug("Closing this query for {}", querier.toString());
           TableQuerier removedQuerier = tableQueue.poll();
           assert removedQuerier == querier;
           now = time.milliseconds();
@@ -227,10 +234,19 @@ public class JdbcSourceTask extends SourceTask {
           continue;
         }
 
-        log.trace("Returning {} records for {}", results.size(), querier.toString());
+        log.debug("Returning {} records for {}", results.size(), querier.toString());
         return results;
       } catch (SQLException e) {
         log.error("Failed to run query for table {}: {}", querier.toString(), e);
+        // clear out the query if we had errors, this also handles backoff in case of errors
+        if (querier != null) {
+          now = time.milliseconds();
+          try {
+            querier.close(now);
+          } catch (SQLException e1) {
+            log.error("Failed to close result set for failed query ", e);
+          }
+        }
         return null;
       }
     }
