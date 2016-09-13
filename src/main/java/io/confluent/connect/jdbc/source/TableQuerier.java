@@ -84,6 +84,10 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
       }
       resultSet = executeQuery();
       schema = DataConverter.convertSchema(name, resultSet.getMetaData());
+      if (fetchSize > 0) {
+        db.commit();
+        db.setAutoCommit(true);
+      }
     }
   }
 
