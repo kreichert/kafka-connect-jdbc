@@ -221,7 +221,7 @@ public class JdbcSourceTask extends SourceTask {
           TableQuerier removedQuerier = tableQueue.poll();
           assert removedQuerier == querier;
           now = time.milliseconds();
-          querier.close(now);
+          querier.close(now, db);
           tableQueue.add(querier);
         }
 
@@ -238,7 +238,7 @@ public class JdbcSourceTask extends SourceTask {
         if (querier != null) {
           now = time.milliseconds();
           try {
-            querier.close(now);
+            querier.close(now, db);
           } catch (SQLException e1) {
             log.error("Failed to close result set for failed query ", e);
           }

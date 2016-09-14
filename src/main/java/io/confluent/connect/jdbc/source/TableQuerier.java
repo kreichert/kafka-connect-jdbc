@@ -84,10 +84,6 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
       }
       resultSet = executeQuery();
       schema = DataConverter.convertSchema(name, resultSet.getMetaData());
-      if (fetchSize > 0) {
-        db.commit();
-        db.setAutoCommit(true);
-      }
     }
   }
 
@@ -99,9 +95,13 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
 
   public abstract SourceRecord extractRecord() throws SQLException;
 
-  public void close(long now) throws SQLException {
-    if (resultSet != null)
+  public void close(long now, Connection db) throws SQLException {
+    if (resultSet != null) {
       resultSet.close();
+      if (fetchSize > 0) {
+        db.setAutoCommit(true);
+      }
+    }
     resultSet = null;
     // TODO: Can we cache this and quickly check that it's identical for the next query
     // instead of constructing from scratch since it's almost always the same
