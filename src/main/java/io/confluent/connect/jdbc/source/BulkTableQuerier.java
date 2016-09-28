@@ -36,8 +36,8 @@ import io.confluent.connect.jdbc.util.JdbcUtils;
 public class BulkTableQuerier extends TableQuerier {
   private static final Logger log = LoggerFactory.getLogger(BulkTableQuerier.class);
 
-  public BulkTableQuerier(QueryMode mode, String name, String topicPrefix, Integer fetchSize) {
-    super(mode, name, topicPrefix, fetchSize);
+  public BulkTableQuerier(QueryMode mode, String name, String schemaPattern, String topicPrefix, Integer fetchSize) {
+    super(mode, name, topicPrefix, schemaPattern, fetchSize);
   }
 
   @Override

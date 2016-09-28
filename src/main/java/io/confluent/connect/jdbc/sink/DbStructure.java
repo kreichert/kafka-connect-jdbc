@@ -125,6 +125,12 @@ public class DbStructure {
       return false;
     }
 
+    for (SinkRecordField missingField: missingFields) {
+      if (!missingField.isOptional() && missingField.defaultValue() == null) {
+        throw new ConnectException("Cannot ALTER to add missing field " + missingField + ", as it is not optional and does not have a default value");
+      }
+    }
+
     if (!config.autoEvolve) {
       throw new ConnectException(String.format("Table %s is missing fields (%s) and auto-evolution is disabled", tableName, missingFields));
     }
@@ -162,7 +168,7 @@ public class DbStructure {
   Set<SinkRecordField> missingFields(Collection<SinkRecordField> fields, Set<String> dbColumnNames) {
     final Set<SinkRecordField> missingFields = new HashSet<>();
     for (SinkRecordField field : fields) {
-      if (!dbColumnNames.contains(field.name)) {
+      if (!dbColumnNames.contains(field.name())) {
         missingFields.add(field);
       }
     }

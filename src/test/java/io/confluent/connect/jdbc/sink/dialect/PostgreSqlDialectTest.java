@@ -16,12 +16,18 @@
 
 package io.confluent.connect.jdbc.sink.dialect;
 
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.junit.Test;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import io.confluent.connect.jdbc.sink.metadata.SinkRecordField;
 
@@ -30,6 +36,22 @@ import static org.junit.Assert.assertEquals;
 public class PostgreSqlDialectTest {
 
   private final DbDialect dialect = new PostgreSqlDialect();
+
+  @Test
+  public void formatColumnValue() {
+    verifyFormatColumnValue(Decimal.LOGICAL_NAME, new BigDecimal("42.42"), "42.42");
+
+    final java.util.Date instant = new java.util.Date(1474661402);
+    verifyFormatColumnValue(Date.LOGICAL_NAME, instant, "to_timestamp(1474661402::double precision / 1000)::date");
+    verifyFormatColumnValue(Time.LOGICAL_NAME, instant, "to_timestamp(1474661402::double precision / 1000)::time");
+    verifyFormatColumnValue(Timestamp.LOGICAL_NAME, instant, "to_timestamp(1474661402::double precision / 1000)::timestamp");
+  }
+
+  private void verifyFormatColumnValue(String schemaName, Object value, String expected) {
+    final StringBuilder builder = new StringBuilder();
+    dialect.formatColumnValue(builder, schemaName, null, null, value);
+    assertEquals(expected, builder.toString());
+  }
 
   @Test
   public void produceTheUpsertQuery() {
@@ -42,9 +64,9 @@ public class PostgreSqlDialectTest {
   @Test
   public void handleCreateTableMultiplePKColumns() {
     String actual = dialect.getCreateQuery("tableA", Arrays.asList(
-        new SinkRecordField(Schema.Type.INT32, "userid", true),
-        new SinkRecordField(Schema.Type.INT32, "userdataid", true),
-        new SinkRecordField(Schema.Type.STRING, "info", false)
+        new SinkRecordField(Schema.INT32_SCHEMA, "userid", true),
+        new SinkRecordField(Schema.INT32_SCHEMA, "userdataid", true),
+        new SinkRecordField(Schema.OPTIONAL_STRING_SCHEMA, "info", false)
     ));
 
     String expected = "CREATE TABLE \"tableA\" (" + System.lineSeparator() +
@@ -58,14 +80,18 @@ public class PostgreSqlDialectTest {
   @Test
   public void handleCreateTableOnePKColumn() {
     String actual = dialect.getCreateQuery("tableA", Arrays.asList(
-        new SinkRecordField(Schema.Type.INT32, "col1", true),
-        new SinkRecordField(Schema.Type.INT64, "col2", false),
-        new SinkRecordField(Schema.Type.STRING, "col3", false),
-        new SinkRecordField(Schema.Type.FLOAT32, "col4", false),
-        new SinkRecordField(Schema.Type.FLOAT64, "col5", false),
-        new SinkRecordField(Schema.Type.BOOLEAN, "col6", false),
-        new SinkRecordField(Schema.Type.INT8, "col7", false),
-        new SinkRecordField(Schema.Type.INT16, "col8", false)
+        new SinkRecordField(Schema.OPTIONAL_INT32_SCHEMA, "col1", true),
+        new SinkRecordField(Schema.OPTIONAL_INT64_SCHEMA, "col2", false),
+        new SinkRecordField(Schema.OPTIONAL_STRING_SCHEMA, "col3", false),
+        new SinkRecordField(Schema.OPTIONAL_FLOAT32_SCHEMA, "col4", false),
+        new SinkRecordField(Schema.OPTIONAL_FLOAT64_SCHEMA, "col5", false),
+        new SinkRecordField(Schema.OPTIONAL_BOOLEAN_SCHEMA, "col6", false),
+        new SinkRecordField(Schema.OPTIONAL_INT8_SCHEMA, "col7", false),
+        new SinkRecordField(Schema.OPTIONAL_INT16_SCHEMA, "col8", false),
+        new SinkRecordField(Timestamp.builder().optional().build(), "col9", false),
+        new SinkRecordField(Date.builder().optional().build(), "col10", false),
+        new SinkRecordField(Time.builder().optional().build(), "col11", false),
+        new SinkRecordField(Decimal.builder(0).optional().build(), "col12", false)
     ));
 
     String expected = "CREATE TABLE \"tableA\" (" + System.lineSeparator() +
@@ -77,6 +103,10 @@ public class PostgreSqlDialectTest {
                       "\"col6\" BOOLEAN NULL," + System.lineSeparator() +
                       "\"col7\" SMALLINT NULL," + System.lineSeparator() +
                       "\"col8\" SMALLINT NULL," + System.lineSeparator() +
+                      "\"col9\" TIMESTAMP NULL," + System.lineSeparator() +
+                      "\"col10\" DATE NULL," + System.lineSeparator() +
+                      "\"col11\" TIME NULL," + System.lineSeparator() +
+                      "\"col12\" DECIMAL NULL," + System.lineSeparator() +
                       "PRIMARY KEY(\"col1\"))";
     assertEquals(expected, actual);
   }
@@ -84,14 +114,18 @@ public class PostgreSqlDialectTest {
   @Test
   public void handleCreateTableNoPKColumn() {
     String actual = dialect.getCreateQuery("tableA", Arrays.asList(
-        new SinkRecordField(Schema.Type.INT32, "col1", false),
-        new SinkRecordField(Schema.Type.INT64, "col2", false),
-        new SinkRecordField(Schema.Type.STRING, "col3", false),
-        new SinkRecordField(Schema.Type.FLOAT32, "col4", false),
-        new SinkRecordField(Schema.Type.FLOAT64, "col5", false),
-        new SinkRecordField(Schema.Type.BOOLEAN, "col6", false),
-        new SinkRecordField(Schema.Type.INT8, "col7", false),
-        new SinkRecordField(Schema.Type.INT16, "col8", false)
+        new SinkRecordField(Schema.OPTIONAL_INT32_SCHEMA, "col1", false),
+        new SinkRecordField(Schema.OPTIONAL_INT64_SCHEMA, "col2", false),
+        new SinkRecordField(Schema.OPTIONAL_STRING_SCHEMA, "col3", false),
+        new SinkRecordField(Schema.OPTIONAL_FLOAT32_SCHEMA, "col4", false),
+        new SinkRecordField(Schema.OPTIONAL_FLOAT64_SCHEMA, "col5", false),
+        new SinkRecordField(Schema.OPTIONAL_BOOLEAN_SCHEMA, "col6", false),
+        new SinkRecordField(Schema.OPTIONAL_INT8_SCHEMA, "col7", false),
+        new SinkRecordField(Schema.OPTIONAL_INT16_SCHEMA, "col8", false),
+        new SinkRecordField(Timestamp.builder().optional().build(), "col9", false),
+        new SinkRecordField(Date.builder().optional().build(), "col10", false),
+        new SinkRecordField(Time.builder().optional().build(), "col11", false),
+        new SinkRecordField(Decimal.builder(0).optional().build(), "col12", false)
     ));
 
     String expected = "CREATE TABLE \"tableA\" (" + System.lineSeparator() +
@@ -102,21 +136,29 @@ public class PostgreSqlDialectTest {
                       "\"col5\" DOUBLE PRECISION NULL," + System.lineSeparator() +
                       "\"col6\" BOOLEAN NULL," + System.lineSeparator() +
                       "\"col7\" SMALLINT NULL," + System.lineSeparator() +
-                      "\"col8\" SMALLINT NULL)";
+                      "\"col8\" SMALLINT NULL," + System.lineSeparator() +
+                      "\"col9\" TIMESTAMP NULL," + System.lineSeparator() +
+                      "\"col10\" DATE NULL," + System.lineSeparator() +
+                      "\"col11\" TIME NULL," + System.lineSeparator() +
+                      "\"col12\" DECIMAL NULL)";
     assertEquals(expected, actual);
   }
 
   @Test
   public void handleAmendAddColumns() {
     List<String> actual = dialect.getAlterTable("tableA", Arrays.asList(
-        new SinkRecordField(Schema.Type.INT32, "col1", false),
-        new SinkRecordField(Schema.Type.INT64, "col2", false),
-        new SinkRecordField(Schema.Type.STRING, "col3", false),
-        new SinkRecordField(Schema.Type.FLOAT32, "col4", false),
-        new SinkRecordField(Schema.Type.FLOAT64, "col5", false),
-        new SinkRecordField(Schema.Type.BOOLEAN, "col6", false),
-        new SinkRecordField(Schema.Type.INT8, "col7", false),
-        new SinkRecordField(Schema.Type.INT16, "col8", false)
+        new SinkRecordField(Schema.OPTIONAL_INT32_SCHEMA, "col1", false),
+        new SinkRecordField(Schema.OPTIONAL_INT64_SCHEMA, "col2", false),
+        new SinkRecordField(Schema.OPTIONAL_STRING_SCHEMA, "col3", false),
+        new SinkRecordField(Schema.OPTIONAL_FLOAT32_SCHEMA, "col4", false),
+        new SinkRecordField(Schema.OPTIONAL_FLOAT64_SCHEMA, "col5", false),
+        new SinkRecordField(Schema.OPTIONAL_BOOLEAN_SCHEMA, "col6", false),
+        new SinkRecordField(Schema.OPTIONAL_INT8_SCHEMA, "col7", false),
+        new SinkRecordField(Schema.OPTIONAL_INT16_SCHEMA, "col8", false),
+        new SinkRecordField(Timestamp.builder().optional().build(), "col9", false),
+        new SinkRecordField(Date.builder().optional().build(), "col10", false),
+        new SinkRecordField(Time.builder().optional().build(), "col11", false),
+        new SinkRecordField(Decimal.builder(0).optional().build(), "col12", false)
     ));
 
     assertEquals(1, actual.size());
@@ -129,7 +171,11 @@ public class PostgreSqlDialectTest {
                       "ADD \"col5\" DOUBLE PRECISION NULL," + System.lineSeparator() +
                       "ADD \"col6\" BOOLEAN NULL," + System.lineSeparator() +
                       "ADD \"col7\" SMALLINT NULL," + System.lineSeparator() +
-                      "ADD \"col8\" SMALLINT NULL";
+                      "ADD \"col8\" SMALLINT NULL," + System.lineSeparator() +
+                      "ADD \"col9\" TIMESTAMP NULL," + System.lineSeparator() +
+                      "ADD \"col10\" DATE NULL," + System.lineSeparator() +
+                      "ADD \"col11\" TIME NULL," + System.lineSeparator() +
+                      "ADD \"col12\" DECIMAL NULL";
     assertEquals(expected, actual.get(0));
   }
 }

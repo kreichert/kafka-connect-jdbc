@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 import io.confluent.connect.jdbc.util.StringUtils;
+import org.apache.kafka.common.config.types.Password;
 
 public class JdbcSinkConfig extends AbstractConfig {
 
@@ -125,7 +126,7 @@ public class JdbcSinkConfig extends AbstractConfig {
       + "`record_key`\n"
       + "    Field(s) from the record key are used, which may be a primitive or a struct.\n"
       + "`record_value`\n"
-      + "    Field(s) from the record value are used, which must be a struct.\n";
+      + "    Field(s) from the record value are used, which must be a struct.";
   private static final String PK_MODE_DISPLAY = "Primary Key Mode";
 
   public static final String PK_FIELDS = "pk.fields";
@@ -137,16 +138,24 @@ public class JdbcSinkConfig extends AbstractConfig {
       + "`kafka`\n"
       + "    Must be a trio representing the Kafka coordinates, defaults to ``" + StringUtils.join(DEFAULT_KAFKA_PK_NAMES, ",") + "`` if empty.\n"
       + "`record_key`\n"
-      + "    If empty, all fields from the key struct will be used, otherwise used to whitelist the desired fields - for primitive key only a single field name must be configured.\n"
+      + "    If empty, all fields from the key struct will be used, otherwise used to extract the desired fields - for primitive key only a single field name must be configured.\n"
       + "`record_value`\n"
-      + "    If empty, all fields from the value struct will be used, otherwise used to whitelist the desired fields.\n";
+      + "    If empty, all fields from the value struct will be used, otherwise used to extract the desired fields.";
   private static final String PK_FIELDS_DISPLAY = "Primary Key Fields";
+
+  public static final String FIELDS_WHITELIST = "fields.whitelist";
+  private static final String FIELDS_WHITELIST_DEFAULT = "";
+  private static final String FIELDS_WHITELIST_DOC =
+      "List of comma-separated record value field names. If empty, all fields from the record value are utilized, otherwise used to filter to the desired fields.\n"
+      + "Note that ``pk.fields`` is applied independently in the context of which field(s) form the primary key columns in the destination database,"
+      + " while this configuration is applicable for the other columns.";
+  private static final String FIELDS_WHITELIST_DISPLAY = "Fields Whitelist";
 
   private static final ConfigDef.Range NON_NEGATIVE_INT_VALIDATOR = ConfigDef.Range.atLeast(0);
 
   private static final String CONNECTION_GROUP = "Connection";
   private static final String WRITES_GROUP = "Writes";
-  private static final String PK_GROUP = "Primary Keys";
+  private static final String DATAMAPPING_GROUP = "Data Mapping";
   private static final String DDL_GROUP = "DDL Support";
   private static final String RETRIES_GROUP = "Retries";
 
@@ -166,8 +175,8 @@ public class JdbcSinkConfig extends AbstractConfig {
               ConfigDef.Importance.MEDIUM, TABLE_NAME_FORMAT_DOC,
               WRITES_GROUP, 1, ConfigDef.Width.LONG, TABLE_NAME_FORMAT_DISPLAY)
       .define(INSERT_MODE, ConfigDef.Type.STRING, INSERT_MODE_DEFAULT, EnumValidator.in(InsertMode.values()),
-              ConfigDef.Importance.MEDIUM, INSERT_MODE_DOC,
-              WRITES_GROUP, 2, ConfigDef.Width.MEDIUM, INSERT_MODE_DISPLAY)
+              ConfigDef.Importance.HIGH, INSERT_MODE_DOC,
+              WRITES_GROUP, 1, ConfigDef.Width.MEDIUM, INSERT_MODE_DISPLAY)
       .define(BATCH_SIZE, ConfigDef.Type.INT, BATCH_SIZE_DEFAULT, NON_NEGATIVE_INT_VALIDATOR,
               ConfigDef.Importance.HIGH, BATCH_SIZE_DOC,
               WRITES_GROUP, 3, ConfigDef.Width.SHORT, BATCH_SIZE_DISPLAY)
@@ -177,10 +186,13 @@ public class JdbcSinkConfig extends AbstractConfig {
       // Primary Keys
       .define(PK_MODE, ConfigDef.Type.STRING, PK_MODE_DEFAULT, EnumValidator.in(PrimaryKeyMode.values()),
               ConfigDef.Importance.HIGH, PK_MODE_DOC,
-              PK_GROUP, 1, ConfigDef.Width.MEDIUM, PK_MODE_DISPLAY)
+              DATAMAPPING_GROUP, 2, ConfigDef.Width.MEDIUM, PK_MODE_DISPLAY)
       .define(PK_FIELDS, ConfigDef.Type.LIST, PK_FIELDS_DEFAULT,
               ConfigDef.Importance.MEDIUM, PK_FIELDS_DOC,
-              PK_GROUP, 2, ConfigDef.Width.LONG, PK_FIELDS_DISPLAY)
+              DATAMAPPING_GROUP, 3, ConfigDef.Width.LONG, PK_FIELDS_DISPLAY)
+      .define(FIELDS_WHITELIST, ConfigDef.Type.LIST, FIELDS_WHITELIST_DEFAULT,
+              ConfigDef.Importance.MEDIUM, FIELDS_WHITELIST_DOC,
+              DATAMAPPING_GROUP, 4, ConfigDef.Width.LONG, FIELDS_WHITELIST_DISPLAY)
       // DDL
       .define(AUTO_CREATE, ConfigDef.Type.BOOLEAN, AUTO_CREATE_DEFAULT,
               ConfigDef.Importance.MEDIUM, AUTO_CREATE_DOC,
@@ -210,16 +222,17 @@ public class JdbcSinkConfig extends AbstractConfig {
   public final InsertMode insertMode;
   public final PrimaryKeyMode pkMode;
   public final List<String> pkFields;
+  public final Set<String> fieldsWhitelist;
 
   public JdbcSinkConfig(Map<?, ?> props) {
     super(CONFIG_DEF, props);
     connectionUrl = getString(CONNECTION_URL);
     connectionUser = getString(CONNECTION_USER);
-    connectionPassword = getString(CONNECTION_PASSWORD);
-    tableNameFormat = getString(TABLE_NAME_FORMAT).trim();
     topicNamesToTableNames = getString(TOPIC_NAMES_TO_TABLE_NAMES);
     topicNamesToTableNamesMap = (topicNamesToTableNames != null) ?
       StringUtils.stringToMap(topicNamesToTableNames, ",", "=") : new HashMap<String, String>();
+    connectionPassword = getPasswordValue(CONNECTION_PASSWORD);
+    tableNameFormat = getString(TABLE_NAME_FORMAT).trim();
     batchSize = getInt(BATCH_SIZE);
     maxRetries = getInt(MAX_RETRIES);
     retryBackoffMs = getInt(RETRY_BACKOFF_MS);
@@ -228,6 +241,15 @@ public class JdbcSinkConfig extends AbstractConfig {
     insertMode = InsertMode.valueOf(getString(INSERT_MODE).toUpperCase());
     pkMode = PrimaryKeyMode.valueOf(getString(PK_MODE).toUpperCase());
     pkFields = getList(PK_FIELDS);
+    fieldsWhitelist = new HashSet<>(getList(FIELDS_WHITELIST));
+  }
+
+  private String getPasswordValue(String key) {
+    Password password = getPassword(key);
+    if (password != null) {
+      return password.value();
+    }
+    return null;
   }
 
   private static class EnumValidator implements ConfigDef.Validator {

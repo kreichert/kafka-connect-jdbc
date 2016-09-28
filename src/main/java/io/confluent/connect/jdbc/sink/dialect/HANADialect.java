@@ -26,9 +26,11 @@ import java.util.Map;
 import io.confluent.connect.jdbc.sink.metadata.SinkRecordField;
 
 import static io.confluent.connect.jdbc.sink.dialect.StringBuilderUtil.joinToBuilder;
+import static io.confluent.connect.jdbc.sink.dialect.StringBuilderUtil.nCopiesToBuilder;
 
-public class OracleDialect extends DbDialect {
-  public OracleDialect() {
+public class HANADialect extends DbDialect {
+
+  public HANADialect() {
     super("\"", "\"");
   }
 
@@ -36,25 +38,31 @@ public class OracleDialect extends DbDialect {
   protected String getSqlType(String schemaName, Map<String, String> parameters, Schema.Type type) {
     switch (type) {
       case INT8:
-        return "NUMBER(3,0)";
+        return "TINYINT";
       case INT16:
-        return "NUMBER(5,0)";
+        return "SMALLINT";
       case INT32:
-        return "NUMBER(10,0)";
+        return "INTEGER";
       case INT64:
-        return "NUMBER(19,0)";
+        return "BIGINT";
       case FLOAT32:
-        return "BINARY_FLOAT";
+        return "REAL";
       case FLOAT64:
-        return "BINARY_DOUBLE";
+        return "DOUBLE";
       case BOOLEAN:
-        return "NUMBER(1,0)";
+        return "BOOLEAN";
       case STRING:
-        return "NVARCHAR2(4000)";
+        return "VARCHAR(1000)";
       case BYTES:
         return "BLOB";
     }
     return super.getSqlType(schemaName, parameters, type);
+  }
+
+  @Override
+  public String getCreateQuery(String tableName, Collection<SinkRecordField> fields) {
+    // Defaulting to Column Store
+    return super.getCreateQuery(tableName, fields).replace("CREATE TABLE", "CREATE COLUMN TABLE");
   }
 
   @Override
@@ -69,37 +77,15 @@ public class OracleDialect extends DbDialect {
 
   @Override
   public String getUpsertQuery(final String table, Collection<String> keyCols, Collection<String> cols) {
-    // https://blogs.oracle.com/cmar/entry/using_merge_to_do_an
-
-    final StringBuilder builder = new StringBuilder();
-    builder.append("merge into ");
-    final String tableName = escaped(table);
-    builder.append(tableName);
-    builder.append(" using (select ");
-    joinToBuilder(builder, ", ", keyCols, cols, prefixedEscaper("? "));
-    builder.append(" FROM dual) incoming on(");
-    joinToBuilder(builder, " and ", keyCols, new StringBuilderUtil.Transform<String>() {
-      @Override
-      public void apply(StringBuilder builder, String col) {
-        builder.append(tableName).append(".").append(escaped(col)).append("=incoming.").append(escaped(col));
-      }
-    });
+    // https://help.sap.com/hana_one/html/sql_replace_upsert.html
+    StringBuilder builder = new StringBuilder("UPSERT ");
+    builder.append(escaped(table));
+    builder.append("(");
+    joinToBuilder(builder, ",", keyCols, cols, escaper());
+    builder.append(") VALUES(");
+    nCopiesToBuilder(builder, ",", "?", keyCols.size() + cols.size());
     builder.append(")");
-    if (cols != null && cols.size() > 0) {
-      builder.append(" when matched then update set ");
-      joinToBuilder(builder, ",", cols, new StringBuilderUtil.Transform<String>() {
-        @Override
-        public void apply(StringBuilder builder, String col) {
-          builder.append(tableName).append(".").append(escaped(col)).append("=incoming.").append(escaped(col));
-        }
-      });
-    }
-
-    builder.append(" when not matched then insert(");
-    joinToBuilder(builder, ",", cols, keyCols, prefixedEscaper(tableName + "."));
-    builder.append(") values(");
-    joinToBuilder(builder, ",", cols, keyCols, prefixedEscaper("incoming."));
-    builder.append(")");
+    builder.append(" WITH PRIMARY KEY");
     return builder.toString();
   }
 }

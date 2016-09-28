@@ -113,6 +113,14 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
   public static final String TABLE_BLACKLIST_DEFAULT = "";
   private static final String TABLE_BLACKLIST_DISPLAY = "Table Blacklist";
 
+  public static final String SCHEMA_PATTERN_CONFIG = "schema.pattern";
+  private static final String SCHEMA_PATTERN_DOC =
+      "Schema pattern to fetch tables metadata from the database:\n"
+      + "  * \"\" retrieves those without a schema,"
+      + "  * null (default) means that the schema name should not be used to narrow the search, all tables "
+      + "metadata would be fetched, regardless their schema.";
+  private static final String SCHEMA_PATTERN_DISPLAY = "Schema pattern";
+
   public static final String QUERY_CONFIG = "query";
   private static final String QUERY_DOC =
       "If specified, the query to perform to select new or updated rows. Use this setting if you "
@@ -179,6 +187,7 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
                 TABLE_RECOMMENDER)
         .define(TABLE_BLACKLIST_CONFIG, Type.LIST, TABLE_BLACKLIST_DEFAULT, Importance.MEDIUM, TABLE_BLACKLIST_DOC, DATABASE_GROUP, 3, Width.LONG, TABLE_BLACKLIST_DISPLAY,
                 TABLE_RECOMMENDER)
+        .define(SCHEMA_PATTERN_CONFIG, Type.STRING, null, Importance.MEDIUM, SCHEMA_PATTERN_DOC, DATABASE_GROUP, 4, Width.SHORT, SCHEMA_PATTERN_DISPLAY)
         .define(TABLE_TYPE_CONFIG, Type.LIST, TABLE_TYPE_DEFAULT, Importance.LOW,
                 TABLE_TYPE_DOC, CONNECTOR_GROUP, 4, Width.MEDIUM, TABLE_TYPE_DISPLAY)
         .define(MODE_CONFIG, Type.STRING, MODE_UNSPECIFIED, ConfigDef.ValidString.in(MODE_UNSPECIFIED, MODE_BULK, MODE_TIMESTAMP, MODE_INCREMENTING, MODE_TIMESTAMP_INCREMENTING),
@@ -212,13 +221,14 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
     @Override
     public List<Object> validValues(String name, Map<String, Object> config) {
       String dbUrl = (String) config.get(CONNECTION_URL_CONFIG);
+      String schemaPattern = (String) config.get(JdbcSourceTaskConfig.SCHEMA_PATTERN_CONFIG);
       if (dbUrl == null) {
         throw new ConfigException(CONNECTION_URL_CONFIG + " cannot be null.");
       }
       Connection db;
       try {
         db = DriverManager.getConnection(dbUrl);
-        return new LinkedList<Object>(JdbcUtils.getTables(db));
+        return new LinkedList<Object>(JdbcUtils.getTables(db, schemaPattern));
       } catch (SQLException e) {
         throw new ConfigException("Couldn't open connection to " + dbUrl, e);
       }

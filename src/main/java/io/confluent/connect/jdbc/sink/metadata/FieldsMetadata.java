@@ -52,29 +52,27 @@ public class FieldsMetadata {
       final String tableName,
       final JdbcSinkConfig.PrimaryKeyMode pkMode,
       final List<String> configuredPkFields,
+      final Set<String> fieldsWhitelist,
       final SchemaPair schemaPair
   ) {
-    return extract(tableName, pkMode, configuredPkFields, schemaPair.keySchema, schemaPair.valueSchema);
+    return extract(tableName, pkMode, configuredPkFields, fieldsWhitelist, schemaPair.keySchema, schemaPair.valueSchema);
   }
 
   public static FieldsMetadata extract(
       final String tableName,
       final JdbcSinkConfig.PrimaryKeyMode pkMode,
       final List<String> configuredPkFields,
+      final Set<String> fieldsWhitelist,
       final Schema keySchema,
       final Schema valueSchema
   ) {
-    if (valueSchema == null) {
-      throw new ConnectException("Record value schema missing");
-    }
-    if (valueSchema.type() != Schema.Type.STRUCT) {
+    if (valueSchema != null && valueSchema.type() != Schema.Type.STRUCT) {
       throw new ConnectException("Value schema must be of type Struct");
     }
 
-    final Set<String> keyFieldNames = new LinkedHashSet<>();
-    final Set<String> nonKeyFieldNames = new LinkedHashSet<>();
     final Map<String, SinkRecordField> allFields = new HashMap<>();
 
+    final Set<String> keyFieldNames = new LinkedHashSet<>();
     switch (pkMode) {
 
       case KAFKA: {
@@ -91,16 +89,15 @@ public class FieldsMetadata {
         }
         final Iterator<String> it = keyFieldNames.iterator();
         final String topicFieldName = it.next();
-        allFields.put(topicFieldName, new SinkRecordField(Schema.Type.STRING, topicFieldName, true));
+        allFields.put(topicFieldName, new SinkRecordField(Schema.STRING_SCHEMA, topicFieldName, true));
         final String partitionFieldName = it.next();
-        allFields.put(partitionFieldName, new SinkRecordField(Schema.Type.INT32, partitionFieldName, true));
+        allFields.put(partitionFieldName, new SinkRecordField(Schema.INT32_SCHEMA, partitionFieldName, true));
         final String offsetFieldName = it.next();
-        allFields.put(offsetFieldName, new SinkRecordField(Schema.Type.INT64, offsetFieldName, true));
+        allFields.put(offsetFieldName, new SinkRecordField(Schema.INT64_SCHEMA, offsetFieldName, true));
       }
       break;
 
       case RECORD_KEY: {
-
         if (keySchema == null) {
           throw new ConnectException(String.format(
               "PK mode for table '%s' is %s, but record key schema is missing", tableName, pkMode
@@ -116,7 +113,7 @@ public class FieldsMetadata {
           }
           final String fieldName = configuredPkFields.get(0);
           keyFieldNames.add(fieldName);
-          allFields.put(fieldName, new SinkRecordField(keySchemaType, fieldName, true, false, keySchema.defaultValue()));
+          allFields.put(fieldName, new SinkRecordField(keySchema, fieldName, true));
         } else if (keySchemaType == Schema.Type.STRUCT) {
           if (configuredPkFields.isEmpty()) {
             for (Field keyField : keySchema.fields()) {
@@ -135,9 +132,8 @@ public class FieldsMetadata {
             keyFieldNames.addAll(configuredPkFields);
           }
           for (String fieldName : keyFieldNames) {
-            final Field keyField = keySchema.field(fieldName);
-            final Schema keyFieldSchema = keyField.schema();
-            allFields.put(fieldName, new SinkRecordField(keyFieldSchema.type(), fieldName, true, false, keyFieldSchema.defaultValue()));
+            final Schema fieldSchema = keySchema.field(fieldName).schema();
+            allFields.put(fieldName, new SinkRecordField(fieldSchema, fieldName, true));
           }
         } else {
           throw new ConnectException("Key schema must be primitive type or Struct, but is of type: " + keySchemaType);
@@ -146,6 +142,9 @@ public class FieldsMetadata {
       break;
 
       case RECORD_VALUE: {
+        if (valueSchema == null) {
+          throw new ConnectException(String.format("PK mode for table '%s' is %s, but record value schema is missing", tableName, pkMode));
+        }
         if (configuredPkFields.isEmpty()) {
           for (Field keyField : valueSchema.fields()) {
             keyFieldNames.add(keyField.name());
@@ -161,26 +160,34 @@ public class FieldsMetadata {
           }
           keyFieldNames.addAll(configuredPkFields);
         }
+        for (String fieldName : keyFieldNames) {
+          final Schema fieldSchema = valueSchema.field(fieldName).schema();
+          allFields.put(fieldName, new SinkRecordField(fieldSchema, fieldName, true));
+        }
       }
       break;
 
     }
 
-    for (Field field : valueSchema.fields()) {
-      final boolean isKeyField = keyFieldNames.contains(field.name());
-      if (!isKeyField) {
+    final Set<String> nonKeyFieldNames = new LinkedHashSet<>();
+    if (valueSchema != null) {
+      for (Field field : valueSchema.fields()) {
+        if (keyFieldNames.contains(field.name())) {
+          continue;
+        }
+        if (!fieldsWhitelist.isEmpty() && !fieldsWhitelist.contains(field.name())) {
+          continue;
+        }
+
         nonKeyFieldNames.add(field.name());
+
+        final Schema fieldSchema = field.schema();
+        allFields.put(field.name(), new SinkRecordField(fieldSchema, field.name(), false));
       }
-      final Schema fieldSchema = field.schema();
-      allFields.put(field.name(), new SinkRecordField(fieldSchema.type(), field.name(), isKeyField, !isKeyField && fieldSchema.isOptional(), fieldSchema.defaultValue()));
     }
 
     if (allFields.isEmpty()) {
       throw new ConnectException("No fields found using key and value schemas for table: " + tableName);
-    }
-
-    if (allFields.isEmpty()) {
-      throw new ConnectException("No fields found");
     }
 
     return new FieldsMetadata(keyFieldNames, nonKeyFieldNames, allFields);

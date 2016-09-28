@@ -36,12 +36,10 @@ import static io.confluent.connect.jdbc.sink.dialect.StringBuilderUtil.nCopiesTo
 
 public abstract class DbDialect {
 
-  private final Map<Schema.Type, String> schemaTypeToSqlTypeMap;
   private final String escapeStart;
   private final String escapeEnd;
 
-  DbDialect(Map<Schema.Type, String> schemaTypeToSqlTypeMap, String escapeStart, String escapeEnd) {
-    this.schemaTypeToSqlTypeMap = schemaTypeToSqlTypeMap;
+  DbDialect(String escapeStart, String escapeEnd) {
     this.escapeStart = escapeStart;
     this.escapeEnd = escapeEnd;
   }
@@ -57,7 +55,9 @@ public abstract class DbDialect {
     return builder.toString();
   }
 
-  public abstract String getUpsertQuery(final String table, final Collection<String> keyColumns, final Collection<String> columns);
+  public String getUpsertQuery(final String table, final Collection<String> keyColumns, final Collection<String> columns) {
+    throw new UnsupportedOperationException();
+  }
 
   public String getCreateQuery(String tableName, Collection<SinkRecordField> fields) {
     final List<String> pkFieldNames = extractPrimaryKeyFieldNames(fields);
@@ -107,20 +107,20 @@ public abstract class DbDialect {
   }
 
   protected void writeColumnSpec(StringBuilder builder, SinkRecordField f) {
-    builder.append(escaped(f.name));
+    builder.append(escaped(f.name()));
     builder.append(" ");
-    builder.append(getSqlType(f.type));
-    if (f.defaultValue != null) {
+    builder.append(getSqlType(f.schemaName(), f.schemaParameters(), f.schemaType()));
+    if (f.defaultValue() != null) {
       builder.append(" DEFAULT ");
-      formatColumnValue(builder, f.type, f.defaultValue);
-    } else if (f.isOptional) {
+      formatColumnValue(builder, f.schemaName(), f.schemaParameters(), f.schemaType(), f.defaultValue());
+    } else if (f.isOptional()) {
       builder.append(" NULL");
     } else {
       builder.append(" NOT NULL");
     }
   }
 
-  static void formatColumnValue(StringBuilder builder, Schema.Type type, Object value) {
+  protected void formatColumnValue(StringBuilder builder, String schemaName, Map<String, String> schemaParameters, Schema.Type type, Object value) {
     switch (type) {
       case INT8:
       case INT16:
@@ -154,12 +154,8 @@ public abstract class DbDialect {
     }
   }
 
-  protected String getSqlType(Schema.Type type) {
-    final String sqlType = schemaTypeToSqlTypeMap.get(type);
-    if (sqlType == null) {
-      throw new ConnectException(String.format("%s type doesn't have a mapping to the SQL database column type", type));
-    }
-    return sqlType;
+  protected String getSqlType(String schemaName, Map<String, String> parameters, Schema.Type type) {
+    throw new ConnectException(String.format("%s (%s) type doesn't have a mapping to the SQL database column type", schemaName, type));
   }
 
   protected String escaped(String identifier) {
@@ -187,8 +183,8 @@ public abstract class DbDialect {
   static List<String> extractPrimaryKeyFieldNames(Collection<SinkRecordField> fields) {
     final List<String> pks = new ArrayList<>();
     for (SinkRecordField f : fields) {
-      if (f.isPrimaryKey) {
-        pks.add(f.name);
+      if (f.isPrimaryKey()) {
+        pks.add(f.name());
       }
     }
     return pks;
@@ -206,6 +202,11 @@ public abstract class DbDialect {
 
     if (url.startsWith("jdbc:oracle:thin:@")) {
       return new OracleDialect();
+    }
+
+    if (url.startsWith("jdbc:sap")) {
+      // HANA url's are in the format : jdbc:sap://$host:3(instance)(port)/
+      return new HANADialect();
     }
 
     final String protocol = extractProtocolFromUrl(url).toLowerCase();
