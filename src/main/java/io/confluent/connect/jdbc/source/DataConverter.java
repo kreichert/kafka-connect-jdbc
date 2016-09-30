@@ -72,7 +72,7 @@ public class DataConverter {
     for (int col = 1; col <= metadata.getColumnCount(); col++) {
       try {
         convertFieldValue(resultSet, col, metadata.getColumnType(col), struct,
-                          metadata.getColumnLabel(col));
+                          metadata.getColumnLabel(col), metadata.getColumnTypeName(col));
       } catch (IOException e) {
         log.warn("Ignoring record because processing failed:", e);
       } catch (SQLException e) {
@@ -249,22 +249,37 @@ public class DataConverter {
         break;
       }
 
+      case Types.OTHER: {
+        // Some of these types will have fixed size, but we drop this from the schema conversion
+        // since only fixed byte arrays can have a fixed size
+        String typeName = metadata.getColumnTypeName(col);
+        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
+          if (optional) {
+            builder.field(fieldName, Schema.OPTIONAL_STRING_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.STRING_SCHEMA);
+          }
+        } else {
+          log.warn("JDBC type {} ({}) not currently supported", sqlType, typeName);
+        }
+        break;
+      }
+
       case Types.ARRAY:
       case Types.JAVA_OBJECT:
-      case Types.OTHER:
       case Types.DISTINCT:
       case Types.STRUCT:
       case Types.REF:
       case Types.ROWID:
       default: {
-        log.warn("JDBC type {} not currently supported", sqlType);
+        log.warn("JDBC type {} ({}) not currently supported", sqlType, metadata.getColumnTypeName(col));
         break;
       }
     }
   }
 
   private static void convertFieldValue(ResultSet resultSet, int col, int colType,
-                                        Struct struct, String fieldName)
+                                        Struct struct, String fieldName, String typeName)
       throws SQLException, IOException {
     final Object colValue;
     switch (colType) {
@@ -411,9 +426,17 @@ public class DataConverter {
         break;
       }
 
+      case Types.OTHER: {
+        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
+          colValue = resultSet.getString(col);
+          break;
+        } else {
+          return;
+        }
+      }
+
       case Types.ARRAY:
       case Types.JAVA_OBJECT:
-      case Types.OTHER:
       case Types.DISTINCT:
       case Types.STRUCT:
       case Types.REF:
