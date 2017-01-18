@@ -16,15 +16,21 @@
 
 package io.confluent.connect.jdbc.sink.dialect;
 
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.ConnectException;
 
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 import javax.xml.bind.DatatypeConverter;
 
@@ -35,6 +41,31 @@ import static io.confluent.connect.jdbc.sink.dialect.StringBuilderUtil.joinToBui
 import static io.confluent.connect.jdbc.sink.dialect.StringBuilderUtil.nCopiesToBuilder;
 
 public abstract class DbDialect {
+  private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
+
+  protected static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+    protected SimpleDateFormat initialValue() {
+      SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+      sdf.setTimeZone(UTC);
+      return sdf;
+    }
+  };
+
+  protected static final ThreadLocal<SimpleDateFormat> TIME_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+    protected SimpleDateFormat initialValue() {
+      SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss.SSS");
+      sdf.setTimeZone(UTC);
+      return sdf;
+    }
+  };
+
+  protected static final ThreadLocal<SimpleDateFormat> TIMESTAMP_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+    protected SimpleDateFormat initialValue() {
+      SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+      sdf.setTimeZone(UTC);
+      return sdf;
+    }
+  };
 
   private final String escapeStart;
   private final String escapeEnd;
@@ -121,6 +152,22 @@ public abstract class DbDialect {
   }
 
   protected void formatColumnValue(StringBuilder builder, String schemaName, Map<String, String> schemaParameters, Schema.Type type, Object value) {
+    if (schemaName != null) {
+      switch (schemaName) {
+        case Decimal.LOGICAL_NAME:
+          builder.append(value);
+          return;
+        case Date.LOGICAL_NAME:
+          builder.append("'").append(DATE_FORMAT.get().format((java.util.Date) value)).append("'");
+          return;
+        case Time.LOGICAL_NAME:
+          builder.append("'").append(TIME_FORMAT.get().format((java.util.Date) value)).append("'");
+          return;
+        case Timestamp.LOGICAL_NAME:
+          builder.append("'").append(TIMESTAMP_FORMAT.get().format((java.util.Date) value)).append("'");
+          return;
+      }
+    }
     switch (type) {
       case INT8:
       case INT16:
@@ -206,7 +253,7 @@ public abstract class DbDialect {
 
     if (url.startsWith("jdbc:sap")) {
       // HANA url's are in the format : jdbc:sap://$host:3(instance)(port)/
-      return new HANADialect();
+      return new HanaDialect();
     }
 
     final String protocol = extractProtocolFromUrl(url).toLowerCase();
