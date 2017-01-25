@@ -100,15 +100,12 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
   public abstract SourceRecord extractRecord() throws SQLException;
 
   public void reset(long now, Connection db) throws SQLException {
-    closeResultSetQuietly();
+    closeResultSetQuietly(db);
     closeStatementQuietly();
     // TODO: Can we cache this and quickly check that it's identical for the next query
     // instead of constructing from scratch since it's almost always the same
     schema = null;
     lastUpdate = now;
-    if (fetchSize > 0) {
-      db.setAutoCommit(true);
-    }
   }
 
   private void closeStatementQuietly() {
@@ -121,10 +118,13 @@ abstract class TableQuerier implements Comparable<TableQuerier> {
     stmt = null;
   }
 
-  private void closeResultSetQuietly() {
+  private void closeResultSetQuietly(Connection db) {
     if (resultSet != null) {
       try {
         resultSet.close();
+        if (fetchSize > 0) {
+          db.setAutoCommit(true);
+        }
       } catch (SQLException ignored) {
       }
     }
