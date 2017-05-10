@@ -37,7 +37,10 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLXML;
 import java.sql.Types;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
+import java.util.TimeZone;
 
 
 /**
@@ -447,7 +450,7 @@ public class DataConverter {
         Array arr = resultSet.getArray(col);
 
         // https://docs.oracle.com/javase/tutorial/jdbc/basics/array.html#retrieving_array
-        Object[] objectArray = (Object[])arr.getArray();
+        Object[] objectArray = (Object[]) arr.getArray();
 
         // The schema validator actually expects a list, not an array
         // For now, convert all types in the array to Strings
