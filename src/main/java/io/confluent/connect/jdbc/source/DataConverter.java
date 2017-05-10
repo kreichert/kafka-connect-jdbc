@@ -252,15 +252,22 @@ public class DataConverter {
       case Types.OTHER: {
         // Some of these types will have fixed size, but we drop this from the schema conversion
         // since only fixed byte arrays can have a fixed size
-        String typeName = metadata.getColumnTypeName(col);
-        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
-          if (optional) {
-            builder.field(fieldName, Schema.OPTIONAL_STRING_SCHEMA);
-          } else {
-            builder.field(fieldName, Schema.STRING_SCHEMA);
+        String typeName = metadata.getColumnTypeName(col).toLowerCase();
+        switch(typeName) {
+          case "jsonb":
+          case "json":
+          case "uuid": {
+            if (optional) {
+              builder.field(fieldName, Schema.OPTIONAL_STRING_SCHEMA);
+            } else {
+              builder.field(fieldName, Schema.STRING_SCHEMA);
+            }
+            break;
           }
-        } else {
-          log.warn("JDBC type {} ({}) not currently supported", sqlType, typeName);
+          default: {
+            log.warn("JDBC type {} ({}) not currently supported", sqlType, typeName);
+            break;
+          }
         }
         break;
       }
@@ -427,12 +434,19 @@ public class DataConverter {
       }
 
       case Types.OTHER: {
-        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
-          colValue = resultSet.getString(col);
-          break;
-        } else {
-          return;
+        String type = typeName.toLowerCase().toLowerCase();
+        switch(type) {
+          case "jsonb":
+          case "json":
+          case "uuid": {
+            colValue = resultSet.getString(col);
+            break;
+          }
+          default: {
+            return;
+          }
         }
+        break;
       }
 
       case Types.ARRAY:
