@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.ResultSet;
@@ -36,6 +37,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLXML;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.TimeZone;
@@ -249,11 +251,23 @@ public class DataConverter {
         break;
       }
 
+      case Types.ARRAY: {
+        // TODO - Right now we convert all arrays to arrays of strings, do we need to support other types yet?
+        SchemaBuilder arrayBuilder = SchemaBuilder.array(
+                SchemaBuilder.STRING_SCHEMA
+        );
+        if (optional) {
+          arrayBuilder.optional();
+        }
+        builder.field(fieldName, arrayBuilder);
+        break;
+      }
+
       case Types.OTHER: {
         // Some of these types will have fixed size, but we drop this from the schema conversion
         // since only fixed byte arrays can have a fixed size
         String typeName = metadata.getColumnTypeName(col).toLowerCase();
-        switch(typeName) {
+        switch (typeName) {
           case "jsonb":
           case "json":
           case "uuid": {
@@ -272,7 +286,6 @@ public class DataConverter {
         break;
       }
 
-      case Types.ARRAY:
       case Types.JAVA_OBJECT:
       case Types.DISTINCT:
       case Types.STRUCT:
@@ -433,9 +446,23 @@ public class DataConverter {
         break;
       }
 
+      case Types.ARRAY: {
+        Array arr = resultSet.getArray(col);
+
+        // For right now, cast all values in the array to Strings
+        ArrayList<String> convertedList = new ArrayList<>();
+        int currentRow = 1;
+        while (arr.getResultSet().next()) {
+          convertedList.add(arr.getResultSet().getString(currentRow));
+          currentRow += 1;
+        }
+        colValue = convertedList.toArray();
+        break;
+      }
+
       case Types.OTHER: {
         String type = typeName.toLowerCase().toLowerCase();
-        switch(type) {
+        switch (type) {
           case "jsonb":
           case "json":
           case "uuid": {
@@ -449,7 +476,6 @@ public class DataConverter {
         break;
       }
 
-      case Types.ARRAY:
       case Types.JAVA_OBJECT:
       case Types.DISTINCT:
       case Types.STRUCT:

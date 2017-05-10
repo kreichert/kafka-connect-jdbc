@@ -118,6 +118,17 @@
             <version>${powermock.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/com.mockrunner/mockrunner-jdbc -->
+        <dependency>
+            <groupId>com.mockrunner</groupId>
+            <artifactId>mockrunner-jdbc</artifactId>
+            <version>1.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20160810</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.derby</groupId>
             <artifactId>derby</artifactId>
