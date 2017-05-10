@@ -178,14 +178,40 @@ public class DataConverterTest {
 
         // Create a fake connection so that we can create an Array
         Connection con = new MockConnection();
-        Array numbersArray = con.createArrayOf("STRING", new Object[]{"1", "2", "3"});
+        Object[] testArray = new Object[]{"1", "2", "3"};
+        Array numbersArray = con.createArrayOf("STRING", testArray);
         mockResultSet.addRow(new Object[]{numbersArray});
 
         // Point the cursor at the first row
         mockResultSet.next();
 
         Struct record = DataConverter.convertRecord(schema, mockResultSet);
-        assertEquals(schema.fields().size(), 1);
-        assertEquals("Expected JSON to be converted to a string", Schema.Type.STRING, schema.fields().get(0).schema().type());
+        List<String> expectedResult = Arrays.asList("1", "2", "3");
+        assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
+    }
+
+    @Test
+    public void convertsNonStringArrayValuesToStringArrayValues() throws SQLException {
+        // Setup
+        final String tableName = "test";
+        final ResultSetMetaData metaData = createArrayMetadata();
+        Schema schema = DataConverter.convertSchema(tableName, metaData);
+
+        MockResultSet mockResultSet = new MockResultSet("myResults");
+        mockResultSet.addColumn("array_column");
+        mockResultSet.setResultSetMetaData(metaData);
+
+        // Create a fake connection so that we can create an Array
+        Connection con = new MockConnection();
+        Object[] testArray = new Object[]{1, 2, 3};
+        Array numbersArray = con.createArrayOf("STRING", testArray);
+        mockResultSet.addRow(new Object[]{numbersArray});
+
+        // Point the cursor at the first row
+        mockResultSet.next();
+
+        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        List<String> expectedResult = Arrays.asList("1", "2", "3");
+        assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
     }
 }
