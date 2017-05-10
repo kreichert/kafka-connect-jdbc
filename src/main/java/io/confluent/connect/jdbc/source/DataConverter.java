@@ -434,12 +434,19 @@ public class DataConverter {
       }
 
       case Types.OTHER: {
-        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
-          colValue = resultSet.getString(col);
-          break;
-        } else {
-          return;
+        String type = typeName.toLowerCase().toLowerCase();
+        switch(type) {
+          case "jsonb":
+          case "json":
+          case "uuid": {
+            colValue = resultSet.getString(col);
+            break;
+          }
+          default: {
+            return;
+          }
         }
+        break;
       }
 
       case Types.ARRAY:
