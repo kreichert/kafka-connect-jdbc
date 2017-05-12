@@ -54,7 +54,7 @@ public class PostgreSqlDialectTest extends BaseDialectTest {
     verifyDataTypeMapping("DATE", Date.SCHEMA);
     verifyDataTypeMapping("TIME", Time.SCHEMA);
     verifyDataTypeMapping("TIMESTAMP", Timestamp.SCHEMA);
-    verifyDataTypeMapping("text[]", arrayBuilder.build());
+    verifyDataTypeMapping("TEXT[]", arrayBuilder.build());
   }
 
   @Test
