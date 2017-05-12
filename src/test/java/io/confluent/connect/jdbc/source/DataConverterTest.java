@@ -214,4 +214,53 @@ public class DataConverterTest {
         List<String> expectedResult = Arrays.asList("1", "2", "3");
         assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
     }
+
+    @Test
+    public void convertsJsonArrayValuesToStringArrayValues() throws SQLException {
+        // Setup
+        final String tableName = "test";
+        final String jsonString = "{\"bar\":\"baz\",\"balance\":7.77,\"active\":false}";
+        final ResultSetMetaData metaData = createArrayMetadata();
+        Schema schema = DataConverter.convertSchema(tableName, metaData);
+
+        MockResultSet mockResultSet = new MockResultSet("myResults");
+        mockResultSet.addColumn("array_column");
+        mockResultSet.setResultSetMetaData(metaData);
+
+        // Create a fake connection so that we can create an Array
+        Connection con = new MockConnection();
+        Object[] testArray = new Object[]{new JSONObject(jsonString), new JSONObject(jsonString)};
+        Array numbersArray = con.createArrayOf("STRING", testArray);
+        mockResultSet.addRow(new Object[]{numbersArray});
+
+        // Point the cursor at the first row
+        mockResultSet.next();
+
+        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        List<String> expectedResult = Arrays.asList(jsonString, jsonString);
+        assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void throwsAnErrorWhenConvertingStringArrayWithNullValues() throws SQLException {
+        // Setup
+        final String tableName = "test";
+        final ResultSetMetaData metaData = createArrayMetadata();
+        Schema schema = DataConverter.convertSchema(tableName, metaData);
+
+        MockResultSet mockResultSet = new MockResultSet("myResults");
+        mockResultSet.addColumn("array_column");
+        mockResultSet.setResultSetMetaData(metaData);
+
+        // Create a fake connection so that we can create an Array
+        Connection con = new MockConnection();
+        Object[] testArray = new Object[]{"a", null, "b"};
+        Array numbersArray = con.createArrayOf("STRING", testArray);
+        mockResultSet.addRow(new Object[]{numbersArray});
+
+        // Point the cursor at the first row
+        mockResultSet.next();
+
+        DataConverter.convertRecord(schema, mockResultSet);
+    }
 }

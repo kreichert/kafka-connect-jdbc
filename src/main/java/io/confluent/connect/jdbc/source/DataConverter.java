@@ -16,6 +16,7 @@
 
 package io.confluent.connect.jdbc.source;
 
+import com.google.common.collect.ImmutableSet;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -40,6 +41,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.Set;
 import java.util.TimeZone;
 
 
@@ -49,6 +51,7 @@ import java.util.TimeZone;
  */
 public class DataConverter {
   private static final Logger log = LoggerFactory.getLogger(JdbcSourceTask.class);
+  private static final Set<String> STRING_CONVERTABLE_TYPES = ImmutableSet.of("json", "jsonb", "uuid");
 
   private static final ThreadLocal<Calendar> UTC_CALENDAR = new ThreadLocal<Calendar>() {
     @Override
@@ -266,21 +269,14 @@ public class DataConverter {
         // Some of these types will have fixed size, but we drop this from the schema conversion
         // since only fixed byte arrays can have a fixed size
         String typeName = metadata.getColumnTypeName(col).toLowerCase();
-        switch (typeName) {
-          case "jsonb":
-          case "json":
-          case "uuid": {
-            if (optional) {
-              builder.field(fieldName, Schema.OPTIONAL_STRING_SCHEMA);
-            } else {
-              builder.field(fieldName, Schema.STRING_SCHEMA);
-            }
-            break;
+        if (STRING_CONVERTABLE_TYPES.contains(typeName)) {
+          if (optional) {
+            builder.field(fieldName, Schema.OPTIONAL_STRING_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.STRING_SCHEMA);
           }
-          default: {
-            log.warn("JDBC type {} ({}) not currently supported", sqlType, typeName);
-            break;
-          }
+        } else {
+          log.warn("JDBC type {} ({}) not currently supported", sqlType, typeName);
         }
         break;
       }
@@ -463,18 +459,12 @@ public class DataConverter {
       }
 
       case Types.OTHER: {
-        String type = typeName.toLowerCase().toLowerCase();
-        switch (type) {
-          case "jsonb":
-          case "json":
-          case "uuid": {
-            colValue = resultSet.getString(col);
-            break;
-          }
-          default: {
-            return;
-          }
+        if (STRING_CONVERTABLE_TYPES.contains(typeName.toLowerCase())) {
+          colValue = resultSet.getString(col);
+        } else {
+          return;
         }
+
         break;
       }
 

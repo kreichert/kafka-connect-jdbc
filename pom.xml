@@ -79,6 +79,11 @@
             <version>${kafka.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.google.collections</groupId>
+            <artifactId>google-collections</artifactId>
+            <version>1.0</version>
+        </dependency>
 
          <!-- JDBC drivers, only included in runtime so they get packaged -->
         <dependency>
