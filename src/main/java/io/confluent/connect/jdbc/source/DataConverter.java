@@ -252,7 +252,6 @@ public class DataConverter {
       }
 
       case Types.ARRAY: {
-        // TODO - Right now we convert all arrays to arrays of strings, do we need to support other types yet?
         SchemaBuilder arrayBuilder = SchemaBuilder.array(
                 SchemaBuilder.STRING_SCHEMA
         );
