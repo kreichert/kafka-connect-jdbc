@@ -454,6 +454,7 @@ public class DataConverter {
           if (obj == null) {
             stringArray.add(null);
           } else if (String.class.isAssignableFrom(obj.getClass()) || JSONObject.class.isAssignableFrom(obj.getClass())) {
+            // json.org.JSONObject guarantees that toString will conform to JSON syntax rules (https://stleary.github.io/JSON-java/)
             stringArray.add(obj.toString());
           } else {
             throw new IOException("Can't process input, supported types in arrays are string, JSON, and null. Your type: " + obj.getClass());
