@@ -258,7 +258,7 @@ public class DataConverter {
         if (optional) {
           arrayBuilder.optional();
         }
-        builder.field(fieldName, arrayBuilder);
+        builder.field(fieldName, arrayBuilder.build());
         break;
       }
 
