@@ -28,8 +28,10 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.List;
 
 import io.confluent.connect.jdbc.sink.metadata.FieldsMetadata;
 import io.confluent.connect.jdbc.sink.metadata.SchemaPair;
@@ -40,17 +42,20 @@ public class PreparedStatementBinder {
   private final PreparedStatement statement;
   private final SchemaPair schemaPair;
   private final FieldsMetadata fieldsMetadata;
+  private final Connection connection;
 
   public PreparedStatementBinder(
       PreparedStatement statement,
       JdbcSinkConfig.PrimaryKeyMode pkMode,
       SchemaPair schemaPair,
-      FieldsMetadata fieldsMetadata
+      FieldsMetadata fieldsMetadata,
+      Connection connection
   ) {
     this.pkMode = pkMode;
     this.statement = statement;
     this.schemaPair = schemaPair;
     this.fieldsMetadata = fieldsMetadata;
+    this.connection = connection;
   }
 
   public void bindRecord(SinkRecord record) throws SQLException {
@@ -106,10 +111,10 @@ public class PreparedStatementBinder {
   }
 
   void bindField(int index, Schema schema, Object value) throws SQLException {
-    bindField(statement, index, schema, value);
+    bindField(statement, index, schema, value, this.connection);
   }
 
-  static void bindField(PreparedStatement statement, int index, Schema schema, Object value) throws SQLException {
+  static void bindField(PreparedStatement statement, int index, Schema schema, Object value, Connection connection) throws SQLException {
     if (value == null) {
       statement.setObject(index, null);
     } else {
@@ -150,6 +155,10 @@ public class PreparedStatementBinder {
               bytes = (byte[]) value;
             }
             statement.setBytes(index, bytes);
+            break;
+          case ARRAY:
+            Object[] objects = ((List<String>) value).toArray();
+            statement.setArray(index, connection.createArrayOf("TEXT", objects));
             break;
           default:
             throw new ConnectException("Unsupported source data type: " + schema.type());

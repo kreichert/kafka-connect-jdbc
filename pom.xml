@@ -23,7 +23,7 @@
     <groupId>io.confluent</groupId>
     <artifactId>kafka-connect-jdbc</artifactId>
     <packaging>jar</packaging>
-    <version>3.1.1-SNAPSHOT.blueapron.11</version>
+    <version>3.1.1-SNAPSHOT.blueapron.12</version>
     <name>kafka-connect-jdbc</name>
     <organization>
         <name>Confluent, Inc.</name>
@@ -51,7 +51,7 @@
 
     <properties>
         <confluent.version>3.1.1-SNAPSHOT</confluent.version>
-        <kafka.version>0.10.1.0-SNAPSHOT</kafka.version>
+        <kafka.version>0.10.1.0</kafka.version>
         <junit.version>4.12</junit.version>
         <easymock.version>3.0</easymock.version>
         <powermock.version>1.6.2</powermock.version>
@@ -78,6 +78,16 @@
             <artifactId>connect-api</artifactId>
             <version>${kafka.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.google.collections</groupId>
+            <artifactId>google-collections</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20160810</version>
         </dependency>
 
          <!-- JDBC drivers, only included in runtime so they get packaged -->
@@ -116,6 +126,13 @@
             <groupId>org.powermock</groupId>
             <artifactId>powermock-api-easymock</artifactId>
             <version>${powermock.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.mockrunner/mockrunner-jdbc -->
+        <dependency>
+            <groupId>com.mockrunner</groupId>
+            <artifactId>mockrunner-jdbc</artifactId>
+            <version>1.1.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>

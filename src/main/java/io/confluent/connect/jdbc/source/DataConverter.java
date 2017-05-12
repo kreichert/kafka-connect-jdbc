@@ -16,6 +16,7 @@
 
 package io.confluent.connect.jdbc.source;
 
+import com.google.common.collect.ImmutableSet;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -23,12 +24,14 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.ResultSet;
@@ -36,8 +39,10 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLXML;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
+import java.util.Set;
 import java.util.TimeZone;
 
 
@@ -47,6 +52,7 @@ import java.util.TimeZone;
  */
 public class DataConverter {
   private static final Logger log = LoggerFactory.getLogger(JdbcSourceTask.class);
+  private static final Set<String> STRING_CONVERTABLE_TYPES = ImmutableSet.of("json", "jsonb", "uuid");
 
   private static final ThreadLocal<Calendar> UTC_CALENDAR = new ThreadLocal<Calendar>() {
     @Override
@@ -81,7 +87,6 @@ public class DataConverter {
     }
     return struct;
   }
-
 
   private static void addFieldSchema(ResultSetMetaData metadata, int col,
                                      SchemaBuilder builder)
@@ -249,11 +254,22 @@ public class DataConverter {
         break;
       }
 
+      case Types.ARRAY: {
+        SchemaBuilder arrayBuilder = SchemaBuilder.array(
+                SchemaBuilder.OPTIONAL_STRING_SCHEMA
+        );
+        if (optional) {
+          arrayBuilder.optional();
+        }
+        builder.field(fieldName, arrayBuilder.build());
+        break;
+      }
+
       case Types.OTHER: {
         // Some of these types will have fixed size, but we drop this from the schema conversion
         // since only fixed byte arrays can have a fixed size
-        String typeName = metadata.getColumnTypeName(col);
-        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
+        String typeName = metadata.getColumnTypeName(col).toLowerCase();
+        if (STRING_CONVERTABLE_TYPES.contains(typeName)) {
           if (optional) {
             builder.field(fieldName, Schema.OPTIONAL_STRING_SCHEMA);
           } else {
@@ -265,7 +281,6 @@ public class DataConverter {
         break;
       }
 
-      case Types.ARRAY:
       case Types.JAVA_OBJECT:
       case Types.DISTINCT:
       case Types.STRUCT:
@@ -426,16 +441,40 @@ public class DataConverter {
         break;
       }
 
+      case Types.ARRAY: {
+        Array arr = resultSet.getArray(col);
+
+        // https://docs.oracle.com/javase/tutorial/jdbc/basics/array.html#retrieving_array
+        Object[] objectArray = (Object[]) arr.getArray();
+
+        // The schema validator actually expects a list, not an array
+        // For now, convert all types in the array to Strings
+        ArrayList<String> stringArray = new ArrayList<>();
+        for (Object obj: objectArray) {
+          if (obj == null) {
+            stringArray.add(null);
+          } else if (String.class.isAssignableFrom(obj.getClass()) || JSONObject.class.isAssignableFrom(obj.getClass())) {
+            // json.org.JSONObject guarantees that toString will conform to JSON syntax rules (https://stleary.github.io/JSON-java/)
+            stringArray.add(obj.toString());
+          } else {
+            throw new IOException("Can't process input, supported types in arrays are string, JSON, and null. Your type: " + obj.getClass());
+          }
+        }
+
+        colValue = stringArray;
+        break;
+      }
+
       case Types.OTHER: {
-        if (typeName.toLowerCase().equals("jsonb") || typeName.toLowerCase().equals("json")) {
+        if (STRING_CONVERTABLE_TYPES.contains(typeName.toLowerCase())) {
           colValue = resultSet.getString(col);
-          break;
         } else {
           return;
         }
+
+        break;
       }
 
-      case Types.ARRAY:
       case Types.JAVA_OBJECT:
       case Types.DISTINCT:
       case Types.STRUCT:
