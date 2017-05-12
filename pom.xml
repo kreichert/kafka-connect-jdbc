@@ -49,6 +49,13 @@
         <tag>HEAD</tag>
     </scm>
 
+    <distributionManagement>
+        <repository>
+            <id>nexus</id>
+            <url>http://ec2-54-210-98-107.compute-1.amazonaws.com:8081/repository/maven-releases/</url>
+        </repository>
+    </distributionManagement>
+
     <properties>
         <confluent.version>3.1.1-SNAPSHOT</confluent.version>
         <kafka.version>0.10.1.0</kafka.version>
