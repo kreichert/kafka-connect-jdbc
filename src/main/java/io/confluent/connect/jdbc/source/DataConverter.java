@@ -24,6 +24,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,7 +87,6 @@ public class DataConverter {
     }
     return struct;
   }
-
 
   private static void addFieldSchema(ResultSetMetaData metadata, int col,
                                      SchemaBuilder builder)
@@ -256,7 +256,7 @@ public class DataConverter {
 
       case Types.ARRAY: {
         SchemaBuilder arrayBuilder = SchemaBuilder.array(
-                SchemaBuilder.STRING_SCHEMA
+                SchemaBuilder.OPTIONAL_STRING_SCHEMA
         );
         if (optional) {
           arrayBuilder.optional();
@@ -451,7 +451,13 @@ public class DataConverter {
         // For now, convert all types in the array to Strings
         ArrayList<String> stringArray = new ArrayList<>();
         for (Object obj: objectArray) {
-          stringArray.add(obj.toString());
+          if (obj == null) {
+            stringArray.add(null);
+          } else if (String.class.isAssignableFrom(obj.getClass()) || JSONObject.class.isAssignableFrom(obj.getClass())) {
+            stringArray.add(obj.toString());
+          } else {
+            throw new IOException("Can't process input, supported types in arrays are string, JSON, and null. Your type: " + obj.getClass());
+          }
         }
 
         colValue = stringArray;

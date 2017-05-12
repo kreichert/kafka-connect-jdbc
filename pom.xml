@@ -84,6 +84,11 @@
             <artifactId>google-collections</artifactId>
             <version>1.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20160810</version>
+        </dependency>
 
          <!-- JDBC drivers, only included in runtime so they get packaged -->
         <dependency>
@@ -128,12 +133,6 @@
             <groupId>com.mockrunner</groupId>
             <artifactId>mockrunner-jdbc</artifactId>
             <version>1.1.2</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-            <version>20160810</version>
             <scope>test</scope>
         </dependency>
         <dependency>

@@ -1,17 +1,15 @@
 package io.confluent.connect.jdbc.source;
 
 
-import com.mockrunner.mock.jdbc.MockArray;
 import com.mockrunner.mock.jdbc.MockConnection;
 import com.mockrunner.mock.jdbc.MockResultSet;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.json.JSONObject;
 import org.junit.Test;
-import org.mockito.Mockito;
+
 import javax.sql.rowset.RowSetMetaDataImpl;
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -210,9 +208,9 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
+        // This throws an exception which causes confluent to skip the record and log the exception.
         Struct record = DataConverter.convertRecord(schema, mockResultSet);
-        List<String> expectedResult = Arrays.asList("1", "2", "3");
-        assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
+        assertEquals("Expected Array to match Array of Strings", null, record.get("array_column"));
     }
 
     @Test
@@ -241,8 +239,8 @@ public class DataConverterTest {
         assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
     }
 
-    @Test(expected = NullPointerException.class)
-    public void throwsAnErrorWhenConvertingStringArrayWithNullValues() throws SQLException {
+    @Test
+    public void convertsAnArrayWithNullsToStringArrayWithNulls() throws SQLException {
         // Setup
         final String tableName = "test";
         final ResultSetMetaData metaData = createArrayMetadata();
@@ -261,6 +259,9 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        List<String> expectedResult = Arrays.asList("a", null, "b");
+        assertEquals("Expected Array to match Array of Strings and nulls", expectedResult, record.get("array_column"));
+
     }
 }
