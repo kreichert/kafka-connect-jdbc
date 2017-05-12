@@ -68,7 +68,7 @@ public class PostgreSqlDialect extends DbDialect {
       case BYTES:
         return "BLOB";
       case ARRAY:
-        return "text[]";
+        return "TEXT[]";
     }
     return super.getSqlType(schemaName, parameters, type);
   }
