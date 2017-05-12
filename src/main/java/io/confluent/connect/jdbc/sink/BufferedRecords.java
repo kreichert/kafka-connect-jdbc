@@ -66,7 +66,7 @@ public class BufferedRecords {
       final String insertSql = getInsertSql();
       log.debug("{} sql: {}", config.insertMode, insertSql);
       preparedStatement = connection.prepareStatement(insertSql);
-      preparedStatementBinder = new PreparedStatementBinder(preparedStatement, config.pkMode, schemaPair, fieldsMetadata);
+      preparedStatementBinder = new PreparedStatementBinder(preparedStatement, config.pkMode, schemaPair, fieldsMetadata, this.connection);
     }
 
     final List<SinkRecord> flushed;
