@@ -42,7 +42,7 @@ public class PreparedStatementBinder {
   private final PreparedStatement statement;
   private final SchemaPair schemaPair;
   private final FieldsMetadata fieldsMetadata;
-  private Connection connection;
+  private final Connection connection;
 
   public PreparedStatementBinder(
       PreparedStatement statement,
