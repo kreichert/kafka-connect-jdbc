@@ -7,6 +7,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.json.JSONObject;
 import org.junit.Test;
+import org.postgresql.util.PGobject;
 
 import javax.sql.rowset.RowSetMetaDataImpl;
 import java.sql.*;
@@ -59,6 +60,13 @@ public class DataConverterTest {
         rowSetMetaData.setColumnTypeName(columnIndex, "ARRAY");
         rowSetMetaData.setColumnLabel(columnIndex, "array_column");
         return rowSetMetaData;
+    }
+
+    private PGobject getPgo(String type, String value) throws SQLException {
+        PGobject pgo = new PGobject();
+        pgo.setType(type);
+        pgo.setValue(value);
+        return pgo;
     }
 
     /**
@@ -227,8 +235,8 @@ public class DataConverterTest {
 
         // Create a fake connection so that we can create an Array
         Connection con = new MockConnection();
-        Object[] testArray = new Object[]{new JSONObject(jsonString), new JSONObject(jsonString)};
-        Array numbersArray = con.createArrayOf("STRING", testArray);
+        Object[] testArray = new Object[]{getPgo("JSON", jsonString), getPgo("JSON", jsonString)};
+        Array numbersArray = con.createArrayOf("JSON", testArray);
         mockResultSet.addRow(new Object[]{numbersArray});
 
         // Point the cursor at the first row

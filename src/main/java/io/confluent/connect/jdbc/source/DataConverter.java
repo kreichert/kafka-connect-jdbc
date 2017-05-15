@@ -24,7 +24,6 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -443,6 +442,8 @@ public class DataConverter {
 
       case Types.ARRAY: {
         Array arr = resultSet.getArray(col);
+        String elementTypeName = arr.getBaseTypeName();
+        boolean isStringConvertableType = STRING_CONVERTABLE_TYPES.contains(elementTypeName.toLowerCase());
 
         // https://docs.oracle.com/javase/tutorial/jdbc/basics/array.html#retrieving_array
         Object[] objectArray = (Object[]) arr.getArray();
@@ -453,11 +454,10 @@ public class DataConverter {
         for (Object obj: objectArray) {
           if (obj == null) {
             stringArray.add(null);
-          } else if (String.class.isAssignableFrom(obj.getClass()) || JSONObject.class.isAssignableFrom(obj.getClass())) {
-            // json.org.JSONObject guarantees that toString will conform to JSON syntax rules (https://stleary.github.io/JSON-java/)
+          } else if (String.class.isAssignableFrom(obj.getClass()) || isStringConvertableType) {
             stringArray.add(obj.toString());
           } else {
-            throw new IOException("Can't process input, supported types in arrays are string, JSON, and null. Your type: " + obj.getClass());
+            throw new IOException("Can't process input, supported types in arrays are string, JSON, UUID, and null. Your type: " + obj.getClass());
           }
         }
 
