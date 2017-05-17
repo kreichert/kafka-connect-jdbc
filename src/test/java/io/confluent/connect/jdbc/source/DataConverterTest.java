@@ -74,36 +74,40 @@ public class DataConverterTest {
      */
     @Test
     public void convertsJSONSchemaToString() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final ResultSetMetaData metaData = createJSONMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
         assertEquals(schema.fields().size(), 1);
         assertEquals("Expected JSON to be converted to a string", Schema.Type.STRING, schema.fields().get(0).schema().type());
     }
 
     @Test
     public void convertsJSONBSchemaToString() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final ResultSetMetaData metaData = createJSONBMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
         assertEquals(schema.fields().size(), 1);
         assertEquals("Expected JSONB to be converted to a string", Schema.Type.STRING, schema.fields().get(0).schema().type());
     }
 
     @Test
     public void convertsUUIDSchemaToString() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final ResultSetMetaData metaData = createUUIDMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
         assertEquals(schema.fields().size(), 1);
         assertEquals("Expected UUID to be converted to a string", Schema.Type.STRING, schema.fields().get(0).schema().type());
     }
 
     @Test
     public void supportsArraySchemaType() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final ResultSetMetaData metaData = createArrayMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
         assertEquals(schema.fields().size(), 1);
         assertEquals("Expected Array to be supported", Schema.Type.ARRAY, schema.fields().get(0).schema().type());
     }
@@ -113,10 +117,11 @@ public class DataConverterTest {
      */
     @Test
     public void convertsJSONValueToString() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final String jsonString = "{\"bar\":\"baz\",\"balance\":7.77,\"active\":false}";
         final ResultSetMetaData metaData = createJSONMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("json_column");
@@ -126,17 +131,18 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
 
         assertEquals("Expected JSON to match JSON string", jsonString, record.get("json_column"));
     }
 
     @Test
     public void convertsJSONBValueToString() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final String jsonbString = "{\"bar\":\"baz\",\"balance\":7.77,\"active\":false}";
         final ResultSetMetaData metaData = createJSONBMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("jsonb_column");
@@ -146,17 +152,18 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
 
         assertEquals("Expected JSONB to match JSONB string", jsonbString, record.get("jsonb_column"));
     }
 
     @Test
     public void convertsUUIDValueToString() throws SQLException {
+        boolean mapNumerics = false;
         final String tableName = "test";
         final String uuidString = "123e4567-e89b-12d3-a456-426655440000";
         final ResultSetMetaData metaData = createUUIDMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("uuid_column");
@@ -166,7 +173,7 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
 
         assertEquals("Expected UUID to match UUID string", uuidString, record.get("uuid_column"));
     }
@@ -174,9 +181,10 @@ public class DataConverterTest {
     @Test
     public void supportsArrayValue() throws SQLException {
         // Setup
+        boolean mapNumerics = false;
         final String tableName = "test";
         final ResultSetMetaData metaData = createArrayMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("array_column");
@@ -191,7 +199,7 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
         List<String> expectedResult = Arrays.asList("1", "2", "3");
         assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
     }
@@ -199,9 +207,10 @@ public class DataConverterTest {
     @Test
     public void convertsNonStringArrayValuesToStringArrayValues() throws SQLException {
         // Setup
+        boolean mapNumerics = false;
         final String tableName = "test";
         final ResultSetMetaData metaData = createArrayMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("array_column");
@@ -217,17 +226,18 @@ public class DataConverterTest {
         mockResultSet.next();
 
         // This throws an exception which causes confluent to skip the record and log the exception.
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
         assertEquals("Expected Array to match Array of Strings", null, record.get("array_column"));
     }
 
     @Test
     public void convertsJsonArrayValuesToStringArrayValues() throws SQLException {
         // Setup
+        boolean mapNumerics = false;
         final String tableName = "test";
         final String jsonString = "{\"bar\":\"baz\",\"balance\":7.77,\"active\":false}";
         final ResultSetMetaData metaData = createArrayMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("array_column");
@@ -242,7 +252,7 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
         List<String> expectedResult = Arrays.asList(jsonString, jsonString);
         assertEquals("Expected Array to match Array of Strings", expectedResult, record.get("array_column"));
     }
@@ -252,7 +262,8 @@ public class DataConverterTest {
         // Setup
         final String tableName = "test";
         final ResultSetMetaData metaData = createArrayMetadata();
-        Schema schema = DataConverter.convertSchema(tableName, metaData);
+        boolean mapNumerics = false;
+        Schema schema = DataConverter.convertSchema(tableName, metaData, mapNumerics);
 
         MockResultSet mockResultSet = new MockResultSet("myResults");
         mockResultSet.addColumn("array_column");
@@ -267,7 +278,7 @@ public class DataConverterTest {
         // Point the cursor at the first row
         mockResultSet.next();
 
-        Struct record = DataConverter.convertRecord(schema, mockResultSet);
+        Struct record = DataConverter.convertRecord(schema, mockResultSet, mapNumerics);
         List<String> expectedResult = Arrays.asList("a", null, "b");
         assertEquals("Expected Array to match Array of Strings and nulls", expectedResult, record.get("array_column"));
 

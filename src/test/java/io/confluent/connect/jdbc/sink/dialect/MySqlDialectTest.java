@@ -49,7 +49,7 @@ public class MySqlDialectTest extends BaseDialectTest {
     verifyDataTypeMapping("DECIMAL(65,2)", Decimal.schema(2));
     verifyDataTypeMapping("DATE", Date.SCHEMA);
     verifyDataTypeMapping("TIME(3)", Time.SCHEMA);
-    verifyDataTypeMapping("TIMESTAMP(3)", Timestamp.SCHEMA);
+    verifyDataTypeMapping("DATETIME(3)", Timestamp.SCHEMA);
   }
 
   @Test
@@ -100,6 +100,15 @@ public class MySqlDialectTest extends BaseDialectTest {
         "insert into `actor`(`actor_id`,`first_name`,`last_name`,`score`) " +
         "values(?,?,?,?) on duplicate key update `first_name`=values(`first_name`),`last_name`=values(`last_name`),`score`=values(`score`)",
         dialect.getUpsertQuery("actor", Arrays.asList("actor_id"), Arrays.asList("first_name", "last_name", "score"))
+    );
+  }
+
+  @Test
+  public void upsertOnlyKeyCols() {
+    assertEquals(
+        "insert into `actor`(`actor_id`) " +
+        "values(?) on duplicate key update `actor_id`=values(`actor_id`)",
+        dialect.getUpsertQuery("actor", Arrays.asList("actor_id"), Collections.<String>emptyList())
     );
   }
 

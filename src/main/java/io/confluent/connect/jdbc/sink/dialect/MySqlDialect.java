@@ -46,7 +46,7 @@ public class MySqlDialect extends DbDialect {
         case Time.LOGICAL_NAME:
           return "TIME(3)";
         case Timestamp.LOGICAL_NAME:
-          return "TIMESTAMP(3)";
+          return "DATETIME(3)";
       }
     }
     switch (type) {
@@ -87,7 +87,7 @@ public class MySqlDialect extends DbDialect {
     joinToBuilder(
         builder,
         ",",
-        cols,
+        cols.isEmpty() ? keyCols : cols,
         new StringBuilderUtil.Transform<String>() {
           @Override
           public void apply(StringBuilder builder, String col) {
