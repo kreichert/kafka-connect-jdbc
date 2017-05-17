@@ -5,11 +5,25 @@ Database
 ^^^^^^^^
 
 ``connection.url``
-  JDBC connection URL for the database to load.
+  JDBC connection URL.
 
   * Type: string
   * Importance: high
   * Dependents: ``table.whitelist``, ``table.blacklist``
+
+``connection.user``
+  JDBC connection user.
+
+  * Type: string
+  * Default: null
+  * Importance: high
+
+``connection.password``
+  JDBC connection password.
+
+  * Type: password
+  * Default: null
+  * Importance: high
 
 ``table.whitelist``
   List of tables to include in copying. If specified, table.blacklist may not be set.
@@ -93,6 +107,13 @@ Connector
   * Type: long
   * Default: 0
   * Importance: high
+
+``numeric.precision.mapping``
+  Whether or not to attempt mapping NUMERIC values by precision to integral types
+
+  * Type: boolean
+  * Default: false
+  * Importance: medium
 
 Mode
 ^^^^

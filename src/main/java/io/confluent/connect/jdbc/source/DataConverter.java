@@ -38,12 +38,11 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLXML;
 import java.sql.Types;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
-import java.util.Set;
-import java.util.TimeZone;
 
+import java.util.ArrayList;
+import java.util.Set;
+
+import io.confluent.connect.jdbc.util.DateTimeUtils;
 
 /**
  * DataConverter handles translating table schemas to Kafka Connect schemas and row data to Kafka
@@ -53,31 +52,24 @@ public class DataConverter {
   private static final Logger log = LoggerFactory.getLogger(JdbcSourceTask.class);
   private static final Set<String> STRING_CONVERTABLE_TYPES = ImmutableSet.of("json", "jsonb", "uuid");
 
-  private static final ThreadLocal<Calendar> UTC_CALENDAR = new ThreadLocal<Calendar>() {
-    @Override
-    protected Calendar initialValue() {
-      return new GregorianCalendar(TimeZone.getTimeZone("UTC"));
-    }
-  };
-
-  public static Schema convertSchema(String tableName, ResultSetMetaData metadata)
+  public static Schema convertSchema(String tableName, ResultSetMetaData metadata, boolean mapNumerics)
       throws SQLException {
     // TODO: Detect changes to metadata, which will require schema updates
     SchemaBuilder builder = SchemaBuilder.struct().name(tableName);
     for (int col = 1; col <= metadata.getColumnCount(); col++) {
-      addFieldSchema(metadata, col, builder);
+      addFieldSchema(metadata, col, builder, mapNumerics);
     }
     return builder.build();
   }
 
-  public static Struct convertRecord(Schema schema, ResultSet resultSet)
+  public static Struct convertRecord(Schema schema, ResultSet resultSet, boolean mapNumerics)
       throws SQLException {
     ResultSetMetaData metadata = resultSet.getMetaData();
     Struct struct = new Struct(schema);
     for (int col = 1; col <= metadata.getColumnCount(); col++) {
       try {
         convertFieldValue(resultSet, col, metadata.getColumnType(col), struct,
-                          metadata.getColumnLabel(col), metadata.getColumnTypeName(col));
+                          metadata.getColumnLabel(col), metadata.getColumnTypeName(col), mapNumerics);
       } catch (IOException e) {
         log.warn("Ignoring record because processing failed:", e);
       } catch (SQLException e) {
@@ -88,7 +80,7 @@ public class DataConverter {
   }
 
   private static void addFieldSchema(ResultSetMetaData metadata, int col,
-                                     SchemaBuilder builder)
+                                     SchemaBuilder builder, boolean mapNumerics)
       throws SQLException {
     // Label is what the query requested the column name be using an "AS" clause, name is the
     // original
@@ -102,6 +94,7 @@ public class DataConverter {
         metadata.isNullable(col) == ResultSetMetaData.columnNullableUnknown) {
       optional = true;
     }
+
     switch (sqlType) {
       case Types.NULL: {
         log.warn("JDBC type {} not currently supported", sqlType);
@@ -121,18 +114,35 @@ public class DataConverter {
       // ints <= 8 bits
       case Types.TINYINT: {
         if (optional) {
-          builder.field(fieldName, Schema.OPTIONAL_INT8_SCHEMA);
+          if (metadata.isSigned(col)) {
+            builder.field(fieldName, Schema.OPTIONAL_INT8_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.OPTIONAL_INT16_SCHEMA);
+          }
         } else {
-          builder.field(fieldName, Schema.INT8_SCHEMA);
+          if (metadata.isSigned(col)) {
+            builder.field(fieldName, Schema.INT8_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.INT16_SCHEMA);
+          }
         }
         break;
       }
+
       // 16 bit ints
       case Types.SMALLINT: {
         if (optional) {
-          builder.field(fieldName, Schema.OPTIONAL_INT16_SCHEMA);
+          if (metadata.isSigned(col)) {
+            builder.field(fieldName, Schema.OPTIONAL_INT16_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.OPTIONAL_INT32_SCHEMA);
+          }
         } else {
-          builder.field(fieldName, Schema.INT16_SCHEMA);
+          if (metadata.isSigned(col)) {
+            builder.field(fieldName, Schema.INT16_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.INT32_SCHEMA);
+          }
         }
         break;
       }
@@ -140,9 +150,17 @@ public class DataConverter {
       // 32 bit ints
       case Types.INTEGER: {
         if (optional) {
-          builder.field(fieldName, Schema.OPTIONAL_INT32_SCHEMA);
+          if (metadata.isSigned(col)) {
+            builder.field(fieldName, Schema.OPTIONAL_INT32_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.OPTIONAL_INT64_SCHEMA);
+          }
         } else {
-          builder.field(fieldName, Schema.INT32_SCHEMA);
+          if (metadata.isSigned(col)) {
+            builder.field(fieldName, Schema.INT32_SCHEMA);
+          } else {
+            builder.field(fieldName, Schema.INT64_SCHEMA);
+          }
         }
         break;
       }
@@ -180,8 +198,33 @@ public class DataConverter {
       }
 
       case Types.NUMERIC:
+        if (mapNumerics) {
+          int precision = metadata.getPrecision(col);
+          if (metadata.getScale(col) == 0 && precision < 19) { // integer
+            Schema schema;
+            if (precision > 9) {
+              schema = (optional) ? Schema.OPTIONAL_INT64_SCHEMA :
+                      Schema.INT64_SCHEMA;
+            } else if (precision > 4) {
+              schema = (optional) ? Schema.OPTIONAL_INT32_SCHEMA :
+                      Schema.INT32_SCHEMA;
+            } else if (precision > 2) {
+              schema = (optional) ? Schema.OPTIONAL_INT16_SCHEMA :
+                      Schema.INT16_SCHEMA;
+            } else {
+              schema = (optional) ? Schema.OPTIONAL_INT8_SCHEMA :
+                      Schema.INT8_SCHEMA;
+            }
+            builder.field(fieldName, schema);
+            break;
+          }
+        }
+
       case Types.DECIMAL: {
-        SchemaBuilder fieldBuilder = Decimal.builder(metadata.getScale(col));
+        int scale = metadata.getScale(col);
+        if (scale == -127) //NUMBER without precision defined for OracleDB
+          scale = 127;
+        SchemaBuilder fieldBuilder = Decimal.builder(scale);
         if (optional) {
           fieldBuilder.optional();
         }
@@ -293,7 +336,7 @@ public class DataConverter {
   }
 
   private static void convertFieldValue(ResultSet resultSet, int col, int colType,
-                                        Struct struct, String fieldName, String typeName)
+                                        Struct struct, String fieldName, String typeName, boolean mapNumerics)
       throws SQLException, IOException {
     final Object colValue;
     switch (colType) {
@@ -310,19 +353,31 @@ public class DataConverter {
 
       // 8 bits int
       case Types.TINYINT: {
-        colValue = resultSet.getByte(col);
+        if (resultSet.getMetaData().isSigned(col)) {
+          colValue = resultSet.getByte(col);
+        } else {
+          colValue = resultSet.getShort(col);
+        }
         break;
       }
 
       // 16 bits int
       case Types.SMALLINT: {
-        colValue = resultSet.getShort(col);
+        if (resultSet.getMetaData().isSigned(col)) {
+          colValue = resultSet.getShort(col);
+        } else {
+          colValue = resultSet.getInt(col);
+        }
         break;
       }
 
       // 32 bits int
       case Types.INTEGER: {
-        colValue = resultSet.getInt(col);
+        if (resultSet.getMetaData().isSigned(col)) {
+          colValue = resultSet.getInt(col);
+        } else {
+          colValue = resultSet.getLong(col);
+        }
         break;
       }
 
@@ -347,13 +402,31 @@ public class DataConverter {
       }
 
       case Types.NUMERIC:
+        if (mapNumerics) {
+          ResultSetMetaData metadata = resultSet.getMetaData();
+          int precision = metadata.getPrecision(col);
+          if (metadata.getScale(col) == 0 && precision < 19) { // integer
+            if (precision > 9) {
+              colValue = resultSet.getLong(col);
+            } else if (precision > 4) {
+              colValue = resultSet.getInt(col);
+            } else if (precision > 2) {
+              colValue = resultSet.getShort(col);
+            } else {
+              colValue = resultSet.getByte(col);
+            }
+            break;
+          }
+        }
       case Types.DECIMAL: {
         int scale = resultSet.getMetaData().getScale(col);
-        BigDecimal bigDecimalValue = resultSet.getBigDecimal(col);
+        if (scale == -127)
+          scale = 127;
+        BigDecimal bigDecimalValue = resultSet.getBigDecimal(col, scale);
         if (bigDecimalValue == null)
           colValue = null;
         else
-          colValue = resultSet.getBigDecimal(col).setScale(scale);
+          colValue = bigDecimalValue;
         break;
       }
 
@@ -381,19 +454,19 @@ public class DataConverter {
 
       // Date is day + moth + year
       case Types.DATE: {
-        colValue = resultSet.getDate(col, UTC_CALENDAR.get());
+        colValue = resultSet.getDate(col, DateTimeUtils.UTC_CALENDAR.get());
         break;
       }
 
       // Time is a time of day -- hour, minute, seconds, nanoseconds
       case Types.TIME: {
-        colValue = resultSet.getTime(col, UTC_CALENDAR.get());
+        colValue = resultSet.getTime(col, DateTimeUtils.UTC_CALENDAR.get());
         break;
       }
 
       // Timestamp is a date + time
       case Types.TIMESTAMP: {
-        colValue = resultSet.getTimestamp(col, UTC_CALENDAR.get());
+        colValue = resultSet.getTimestamp(col, DateTimeUtils.UTC_CALENDAR.get());
         break;
       }
 

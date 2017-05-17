@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Recommender;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -36,8 +37,16 @@ import java.util.Map;
 public class JdbcSourceConnectorConfig extends AbstractConfig {
 
   public static final String CONNECTION_URL_CONFIG = "connection.url";
-  private static final String CONNECTION_URL_DOC = "JDBC connection URL for the database to load.";
-  private static final String CONNECTION_URL_DISPLAY = "Connection Url";
+  private static final String CONNECTION_URL_DOC = "JDBC connection URL.";
+  private static final String CONNECTION_URL_DISPLAY = "JDBC URL";
+
+  public static final String CONNECTION_USER_CONFIG = "connection.user";
+  private static final String CONNECTION_USER_DOC = "JDBC connection user.";
+  private static final String CONNECTION_USER_DISPLAY = "JDBC User";
+
+  public static final String CONNECTION_PASSWORD_CONFIG = "connection.password";
+  private static final String CONNECTION_PASSWORD_DOC = "JDBC connection password.";
+  private static final String CONNECTION_PASSWORD_DISPLAY = "JDBC Password";
 
   public static final String POLL_INTERVAL_MS_CONFIG = "poll.interval.ms";
   private static final String POLL_INTERVAL_MS_DOC = "Frequency in ms to poll for new data in "
@@ -55,6 +64,12 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
   public static final String FETCH_SIZE_CONFIG = "fetch.size";
   public static final int FETCH_SIZE_DEFAULT = 100;
   private static final String FETCH_SIZE_CONFIG_DOC = "Number of records to fetch when getting results based on cursor";
+
+  public static final String NUMERIC_PRECISION_MAPPING_CONFIG = "numeric.precision.mapping";
+  private static final String NUMERIC_PRECISION_MAPPING_DOC =
+          "Whether or not to attempt mapping NUMERIC values by precision to integral types";
+  public static final boolean NUMERIC_PRECISION_MAPPING_DEFAULT = false;
+  private static final String NUMERIC_PRECISION_MAPPING_DISPLAY = "Map Numeric Values By Precision";
 
   public static final String MODE_CONFIG = "mode";
   private static final String MODE_DOC =
@@ -182,13 +197,16 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
   public static ConfigDef baseConfigDef() {
     return new ConfigDef()
         .define(CONNECTION_URL_CONFIG, Type.STRING, Importance.HIGH, CONNECTION_URL_DOC, DATABASE_GROUP, 1, Width.LONG, CONNECTION_URL_DISPLAY, Arrays.asList(TABLE_WHITELIST_CONFIG, TABLE_BLACKLIST_CONFIG))
-        .define(TABLE_WHITELIST_CONFIG, Type.LIST, TABLE_WHITELIST_DEFAULT, Importance.MEDIUM, TABLE_WHITELIST_DOC, DATABASE_GROUP, 2, Width.LONG, TABLE_WHITELIST_DISPLAY,
+        .define(CONNECTION_USER_CONFIG, Type.STRING, null, Importance.HIGH, CONNECTION_USER_DOC, DATABASE_GROUP, 2, Width.LONG, CONNECTION_USER_DISPLAY)
+        .define(CONNECTION_PASSWORD_CONFIG, Type.PASSWORD, null, Importance.HIGH, CONNECTION_PASSWORD_DOC, DATABASE_GROUP, 3, Width.SHORT, CONNECTION_PASSWORD_DISPLAY)
+        .define(TABLE_WHITELIST_CONFIG, Type.LIST, TABLE_WHITELIST_DEFAULT, Importance.MEDIUM, TABLE_WHITELIST_DOC, DATABASE_GROUP, 4, Width.LONG, TABLE_WHITELIST_DISPLAY,
                 TABLE_RECOMMENDER)
-        .define(TABLE_BLACKLIST_CONFIG, Type.LIST, TABLE_BLACKLIST_DEFAULT, Importance.MEDIUM, TABLE_BLACKLIST_DOC, DATABASE_GROUP, 3, Width.LONG, TABLE_BLACKLIST_DISPLAY,
+        .define(TABLE_BLACKLIST_CONFIG, Type.LIST, TABLE_BLACKLIST_DEFAULT, Importance.MEDIUM, TABLE_BLACKLIST_DOC, DATABASE_GROUP, 5, Width.LONG, TABLE_BLACKLIST_DISPLAY,
                 TABLE_RECOMMENDER)
         .define(SCHEMA_PATTERN_CONFIG, Type.STRING, null, Importance.MEDIUM, SCHEMA_PATTERN_DOC, DATABASE_GROUP, 4, Width.SHORT, SCHEMA_PATTERN_DISPLAY)
         .define(TABLE_TYPE_CONFIG, Type.LIST, TABLE_TYPE_DEFAULT, Importance.LOW,
                 TABLE_TYPE_DOC, CONNECTOR_GROUP, 4, Width.MEDIUM, TABLE_TYPE_DISPLAY)
+        .define(NUMERIC_PRECISION_MAPPING_CONFIG, Type.BOOLEAN, NUMERIC_PRECISION_MAPPING_DEFAULT, Importance.LOW, NUMERIC_PRECISION_MAPPING_DOC, DATABASE_GROUP, 4, Width.SHORT, NUMERIC_PRECISION_MAPPING_DISPLAY)
         .define(MODE_CONFIG, Type.STRING, MODE_UNSPECIFIED, ConfigDef.ValidString.in(MODE_UNSPECIFIED, MODE_BULK, MODE_TIMESTAMP, MODE_INCREMENTING, MODE_TIMESTAMP_INCREMENTING),
                 Importance.HIGH, MODE_DOC, MODE_GROUP, 1, Width.MEDIUM, MODE_DISPLAY, Arrays.asList(INCREMENTING_COLUMN_NAME_CONFIG, TIMESTAMP_COLUMN_NAME_CONFIG, VALIDATE_NON_NULL_CONFIG))
         .define(INCREMENTING_COLUMN_NAME_CONFIG, Type.STRING, INCREMENTING_COLUMN_NAME_DEFAULT, Importance.MEDIUM, INCREMENTING_COLUMN_NAME_DOC, MODE_GROUP, 2, Width.MEDIUM, INCREMENTING_COLUMN_NAME_DISPLAY,
@@ -220,13 +238,15 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
     @Override
     public List<Object> validValues(String name, Map<String, Object> config) {
       String dbUrl = (String) config.get(CONNECTION_URL_CONFIG);
+      String dbUser = (String) config.get(CONNECTION_USER_CONFIG);
+      Password dbPassword = (Password) config.get(CONNECTION_PASSWORD_CONFIG);
       String schemaPattern = (String) config.get(JdbcSourceTaskConfig.SCHEMA_PATTERN_CONFIG);
       if (dbUrl == null) {
         throw new ConfigException(CONNECTION_URL_CONFIG + " cannot be null.");
       }
       Connection db;
       try {
-        db = DriverManager.getConnection(dbUrl);
+        db = DriverManager.getConnection(dbUrl, dbUser, dbPassword == null ? null : dbPassword.value());
         return new LinkedList<Object>(JdbcUtils.getTables(db, schemaPattern));
       } catch (SQLException e) {
         throw new ConfigException("Couldn't open connection to " + dbUrl, e);
@@ -271,6 +291,6 @@ public class JdbcSourceConnectorConfig extends AbstractConfig {
   }
 
   public static void main(String[] args) {
-    System.out.println(CONFIG_DEF.toRst());
+    System.out.println(CONFIG_DEF.toEnrichedRst());
   }
 }
